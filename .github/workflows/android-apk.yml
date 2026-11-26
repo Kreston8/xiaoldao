@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or update (leave empty for xiaoldao-v2.17.<run number>)"
+        description: "Release tag to create or update (leave empty for xiaoldao-v2.18.<run number>)"
         required: false
         default: ""
   push:
@@ -67,7 +67,7 @@ jobs:
           VERSION_CODE=$((1000 + ${{ github.run_number }}))
           gradle assembleRelease --no-daemon --stacktrace \
             -PversionCode="$VERSION_CODE" \
-            -PversionName="2.17.${{ github.run_number }}"
+            -PversionName="2.18.${{ github.run_number }}"
 
       # Advisory only: the artifact is verified locally afterwards, this just says which key signed it.
       - name: Check the signing certificate
@@ -84,7 +84,7 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk \
-          "dist/xiaoldao-2.17.${{ github.run_number }}.apk"
+          "dist/xiaoldao-2.18.${{ github.run_number }}.apk"
           ls -l dist
           unzip -l dist/*.apk | head -30
 
@@ -98,7 +98,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.17.${{ github.run_number }}"; fi
+          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.18.${{ github.run_number }}"; fi
           cat > notes.md <<'NOTES'
           ## English
 
@@ -106,11 +106,11 @@ jobs:
           小灵岛 (xiaoldao) is a notification island for Android: a black pill at the top of the screen that opens for messages, verification codes, pickup codes, deliveries, calls, alarms and the 网易云音乐 player with line-by-line lyrics, plus a small standby pill on the home screen with the clock, the temperature and the weather. Plain Java, two overlay windows, no WebView.
 
           **What is new in this build**
-          - **Icon, third pass.** The capsule in the middle of the launcher icon is flatter now (46×28 inside the tile), the two HUD lines that used to sit at its sides are gone, and the eyes are no longer round dots with a gradient halo: they are the same two upright pills the island itself draws, 6.6×9.6 each, 13 units apart, white with a cold rim, so the icon and the app finally agree on what the face looks like.
-          - **The island now survives leaving the app.** `onTaskRemoved` — and a service destroyed while the switch is still on — queue a persisted one-shot `JobScheduler` job for 10 seconds later, next to the 15-minute watchdog, so the usual gap between "swiped the app away" and "the island is back on the launcher" is seconds instead of up to a quarter of an hour. The foreground-service notification is also marked `FOREGROUND_SERVICE_IMMEDIATE`, so the state is real from the first second — the moment vendor killers watch hardest. The 后台常驻 card gained a 打开「自启动」设置 button that jumps straight to the MIUI auto-start page (and falls back to the app page if the ROM hides it).
-          - **Weather stops going blank.** A successful reading — temperature, WMO code, AQI, resolved place and coordinates, stamped with the city name and the time — is written to this device, so a killed process shows the last known number at once instead of an empty chip while it refetches; entries older than 12 hours are dropped. Coordinates are reused, so a normal refresh is one request instead of two, failures back off 90 s → 3 min → 10 min → 30 min instead of a flat 90 s, and a half answer (forecast without AQI) keeps the previous value instead of blanking it.
+          - **Coming back no longer takes fifteen minutes.** An alarm eight seconds out is queued the moment the task is swiped away — and again if the service is destroyed while the switch is still on — with the persisted ten-second job and the fifteen-minute watchdog behind it. The alarm is the reliable half: delivering a broadcast puts the app on Android's temporary allow-list for a few seconds, which is exactly the window in which a foreground service may be started from the background, and a refused attempt is not dropped — it retries after 30 s, 60 s, 3 min, 10 min, then every 15 minutes. Both paths answer "is the service still there" first, so the second one never restarts a service that is already running.
+          - **A pill that never hid for the wrong reason.** The launcher test used to believe "another app is in front" until the next usage event arrived; on a ROM that stops delivering them, that meant the standby pill and the lyrics card could stay invisible for the rest of the day. An answer older than two minutes is now thrown away and the next poll falls back to the safe default instead.
+          - **保活诊断, so this can be measured instead of guessed.** A new card prints the last sixty moments — service created, task removed, alarm fired, launch refused (with the exception name), and every change of the standby pill's visibility together with the three inputs behind it (switch, usage access, launcher in front) — with 复制诊断 and 清空记录 buttons. The 后台常驻 text now lists the four MIUI steps, including 设置 → 省电与电池 →「锁屏后清理内存」= 永不 and locking the card in the recent tasks.
 
-          **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS; MIUI also needs 后台弹出界面, and for 小灵岛 to stay alive after you leave the app it needs 自启动 with an unrestricted 省电策略 — the new button in Settings opens that page. Limits worth knowing: Android 12 and newer normally forbids starting a foreground service from the background, which is why the watchdog lives in a `JobScheduler` job, why the 10-second job is a persisted one, and why opening the app also restarts the island; a 强行停止 still cancels everything, that is the system's design and nothing an app schedules survives it; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Four hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md) · [中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md)
+          **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS. Two of the four MIUI steps are buttons on the 后台常驻 card (自启动, 电池优化), the other two are in MIUI's own settings. Limits worth knowing: Android 12 and newer normally forbids starting a foreground service from the background, which is why the fast path is an alarm rather than only a job; a 强行停止 still cancels everything — alarms, jobs, sticky service — and that is the system's design, nothing an app schedules survives it; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Four hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md) · [中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md)
 
           ## 中文
 
@@ -118,11 +118,11 @@ jobs:
           小灵岛是一个 Android 通知岛：屏幕顶部一颗黑色胶囊，为消息、验证码、取件码、快递、来电、闹钟和网易云音乐（带逐行歌词）弹开；桌面上还有一个更小的常驻药丸，显示时钟、气温和天气。纯 Java，两个 overlay 窗口，没有 WebView。
 
           **本次更新**
-          - **图标第三版。** 桌面图标中间的胶囊更扁了（图里 46×28），原来贴在胶囊两侧的两条 HUD 横线删掉了，眼睛也不再是带光晕的圆点，而是和应用里那颗岛一样的竖向药丸：每只 6.6×9.6、中心间距 13、白色带冷色描边——图标和 App 终于画的是同一张脸。
-          - **退出应用之后，岛能自己回来了。** 任务被划掉时（`onTaskRemoved`），以及开关还开着、服务却被销毁时，除了原来那条 15 分钟的看门狗，还会多排一个持久化的一次性 `JobScheduler` 任务，10 秒后跑一次，所以「把应用划掉 → 桌面上的岛回来」通常只要几秒，而不是最长十几分钟。前台服务通知也标成了 `FOREGROUND_SERVICE_IMMEDIATE`，让服务状态从第一秒就是真的——那正是厂商杀手盯得最紧的时候。「后台常驻」卡片上多了一个「打开『自启动』设置」按钮，直接跳到 MIUI 的自启动页（ROM 藏起来时退回应用详情页）。
-          - **天气不再时好时坏地空着。** 成功拿到一次读数（气温、WMO 代码、AQI、解析到的地名和坐标，连城市名和抓取时间一起）就写进本机，所以进程被杀之后先显示上次的数字，而不是空着等重抓；超过 12 小时的记录自动丢掉。坐标同时复用，平常一次刷新只需一个请求而不是两个；失败后按 90 秒 → 3 分钟 → 10 分钟 → 30 分钟逐级退避，不再固定 90 秒；只答了一半（有气温没 AQI）时保留旧值，而不是把已有数字清空。
+          - **回来不用再等十五分钟了。** 任务被划掉的那一刻就排一个 8 秒后的闹钟；如果开关还开着、服务却被销毁，也排同一个。后面还有持久化的 10 秒 job 和 15 分钟看门狗兜底。闹钟是可靠的那一半：广播投递会让应用进入系统临时白名单几秒，正好是「允许从后台启动前台服务」的那个窗口；被拒的那次不会被丢掉，按 30 秒、60 秒、3 分钟、10 分钟重试，之后每 15 分钟一次。两条路都会先问一句「服务还在吗」，所以后到的那条不会把已经跑着的服务再启动一遍。
+          - **药丸不会因为一个过期判断整天不出现。** 以前的「桌面在前台」判定会一直相信上一次的「别的应用在前台」，直到下一个用量事件到达；碰上某个 ROM 干脆不投递事件，常驻药丸和歌词卡片就可能一整天都不出现。现在超过两分钟的旧判断会被丢掉，下一次轮询回到安全的默认值。
+          - **新增「保活诊断」，让这件事能被测量而不是靠猜。** 新卡片打印最近六十条记录：服务创建、任务被划掉、闹钟触发、启动被拒（带异常名）、以及常驻药丸每次显示/隐藏的变化和它背后的三个输入（开关、用量权限、桌面是否在前台），旁边是「复制诊断」和「清空记录」。「后台常驻」的说明也改成了 MIUI 的四步，补上 设置 → 省电与电池 →「锁屏后清理内存」= 永不，以及在最近任务里下拉加锁。
 
-          **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS；MIUI 还需开启「后台弹出界面」，而想让小灵岛在你退出应用后继续活着，还要开「自启动」并把「省电策略」设为无限制——设置页里新加的那个按钮就是直接跳到自启动页的。要提前知道的限制：Android 12 起默认禁止后台启动前台服务，所以看门狗放在 `JobScheduler` 任务里、10 秒那个任务做成持久化的、打开应用时也会顺手把岛拉起来；但「强行停止」仍会清掉一切，应用排的任何任务都活不过它，这是系统的设计；待办卡片直接读小米笔记、需要 root，因为它不提供 provider；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问四个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）与 music.163.com（联网歌词）。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md)
+          **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS。「后台常驻」卡片上有两个按钮直达其中两步（自启动、电池优化），另外两步在 MIUI 自己的设置里。要提前知道的限制：Android 12 起默认禁止后台启动前台服务，所以快的那条路是闹钟而不是只用 job；「强行停止」仍然会清掉一切——闹钟、job、粘性服务全没了——这是系统的设计，应用排的任何任务都活不过它；待办卡片直接读小米笔记、需要 root，因为它不提供 provider；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问四个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）与 music.163.com（联网歌词）。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md)
           NOTES
           echo "Publishing $TAG"
           gh release create "$TAG" dist/*.apk --title "小灵岛 $TAG" --notes-file notes.md \

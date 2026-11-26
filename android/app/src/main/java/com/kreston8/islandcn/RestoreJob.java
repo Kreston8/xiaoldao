@@ -6,7 +6,6 @@ import android.app.job.JobScheduler;
 import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 
 /**
  * Fourth keep-alive layer, and the only one that can legally start the foreground service from the
@@ -100,14 +99,11 @@ public final class RestoreJob extends JobService {
     public boolean onStartJob(JobParameters params) {
         // The user's intent, not the current process state, decides: a person who switched the
         // island off must not find it back after the next window.
-        if (Prefs.running(this) && !IslandService.isRunning() && Perms.canOverlay(this)) {
-            Context app = getApplicationContext();
-            try {
-                app.startForegroundService(new Intent(app, IslandService.class));
-            } catch (RuntimeException ignored) {
-                // Still refused: the next window tries again, and MainActivity.onResume restores it
-                // the moment the app is opened, which needs no allow-list at all.
-            }
+        boolean running = IslandService.isRunning();
+        Diag.note(this, "job 触发（服务" + (running ? "在" : "不在") + "）");
+        if (!running && Prefs.running(this) && Perms.canOverlay(this)) {
+            // Shared with the alarm path so both leave the same kind of line in the log.
+            KeepAlive.startService(this);
         }
         // Nothing runs asynchronously, so the job is finished as soon as this returns.
         return false;

@@ -149,6 +149,8 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     private long notifyHoldUntil;
     private boolean standbyHas;
     private boolean standbyHome;
+    /** Last visibility decision, so the diagnostic log gets a line only when it changes. */
+    private Boolean diagHome;
 
     /** Every music card key starts with this, which is how a stopped track is recognised. */
     private static final String MUSIC_KEY = "music:";
@@ -170,6 +172,7 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         IslandBridge.attach(this);
+        Diag.note(this, "服务创建");
     }
 
     /**
@@ -179,17 +182,21 @@ public final class IslandService extends Service implements IslandBridge.Sink {
      * {@code stopWithTask="false"}; only the activity is gone, so dropping the windows here would
      * turn "close the app" into "the island is dead until the app is opened again".
      *
-     * <p>Three things happen here, in the order that matters: the launcher test is re-run at once
+     * <p>Four things happen here, in the order that matters: the launcher test is re-run at once
      * instead of on the next four-second tick, so the pill cannot blink out while the task is being
-     * torn down; a job is queued ten seconds out, because a job outlives this process and ten
-     * seconds is when the vendor killer usually strikes; and the fifteen-minute alarm is re-armed
-     * as the slow safety net behind both. Nothing here survives a user-initiated force-stop: the
-     * system cancels this package's alarms and jobs by design, and the settings screen says so.
+     * torn down; an alarm is queued eight seconds out, because delivering a broadcast puts the app
+     * on the temporary allow-list that lets Android 12 start a foreground service from a background
+     * process; a job is queued ten seconds out as the second chance, since a job outlives this
+     * process; and the fifteen-minute alarm is re-armed as the slow safety net behind all three.
+     * Nothing here survives a user-initiated force-stop: the system cancels this package's alarms
+     * and jobs by design, and the settings screen says so.
      */
     @Override
     public void onTaskRemoved(Intent rootIntent) {
+        Diag.note(this, "任务被划掉（running=" + running + "）");
         if (running) {
             KeepAlive.start(this);
+            KeepAlive.startNow(this);
             RestoreJob.scheduleNow(this);
             startStandby();
         }
@@ -336,10 +343,13 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         island = null;
         if (Prefs.running(this)) {
             // Not a deliberate stop (that path clears the flag first), so the process is being taken
-            // away while the island is still wanted: queue the fastest legal restart right here,
-            // because a scheduled job outlives this process and an unqueued one does not.
-            KeepAlive.start(this);
+            // away while the island is still wanted: queue both the alarm and the job right here,
+            // because a pending alarm or job outlives this process and an unqueued one does not.
+            Diag.note(this, "服务销毁，但开关还开着：排队复活");
+            KeepAlive.startNow(this);
             RestoreJob.scheduleNow(this);
+        } else {
+            Diag.note(this, "服务销毁：开关已关");
         }
         super.onDestroy();
     }
@@ -509,7 +519,9 @@ public final class IslandService extends Service implements IslandBridge.Sink {
      */
     private void updateStandby() {
         boolean on = Prefs.opt(this, Prefs.KEY_STANDBY);
-        boolean home = on && Perms.hasUsageAccess(this) && StandbyView.homeInFront(this);
+        boolean usage = Perms.hasUsageAccess(this);
+        boolean front = usage && StandbyView.homeInFront(this);
+        boolean home = on && front;
         boolean has = false;
         if (home && attachStandby()) {
             try {
@@ -520,6 +532,11 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         }
         standbyHome = home;
         standbyHas = has;
+        if (diagHome == null || diagHome != home) {
+            diagHome = home;
+            Diag.note(this, "常驻岛" + (home ? "显示" : "隐藏") + "（开关 " + on + "，用量权限 " + usage
+                    + "，桌面在前 " + front + "）");
+        }
         applyPhase();
     }
 

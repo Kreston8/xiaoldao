@@ -8,6 +8,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -53,6 +55,7 @@ public final class MainActivity extends Activity {
     private TextView usageState;
     private TextView serviceState;
     private Button startStop;
+    private TextView diagText;
     private Button cityButton;
     private LinearLayout standbyRows;
     private TextView weatherState;
@@ -139,9 +142,11 @@ public final class MainActivity extends Activity {
         addFill(root, serviceCard, 10);
 
         LinearLayout keepCard = card();
-        TextView keepDesc = text("MIUI 上要让岛一直活着，需要三步：①「自启动」里允许本 App；"
-                        + "②省电策略设为「无限制」；③在最近任务里把本 App 锁定。\n"
-                        + "本 App 已是前台服务，正常退出界面后仍会常驻；只有手动「强行停止」之后无法自动复活，"
+        TextView keepDesc = text("MIUI 上要让岛一直活着，需要四步：①「自启动」里允许本 App；"
+                        + "②省电策略设为「无限制」；③设置→省电与电池→「锁屏后清理内存」设为「永不」；"
+                        + "④在最近任务里把本 App 下拉加锁。\n"
+                        + "这四步做完，划掉应用岛也还在；万一进程还是被杀了，任务被划掉的 8 秒后会自动排队把它拉回来，"
+                        + "失败就按 30 秒 / 1 分钟 / 3 分钟 / 10 分钟重试。只有手动「强行停止」之后无法自动复活，"
                         + "这是系统限制（任何 App 都一样），回到本页会自动重新拉起。",
                 13f, COLOR_SECONDARY, false);
         keepDesc.setLineSpacing(dp(3), 1f);
@@ -165,6 +170,32 @@ public final class MainActivity extends Activity {
         autoButton.setTextSize(13f);
         addFill(keepCard, autoButton, 8);
         addFill(root, keepCard, 10);
+        LinearLayout diagCard = card();
+        TextView diagDesc = text("退出应用之后到底发生了什么，这里会写成几行：任务被划掉、闹钟触发、"
+                + "启动请求被拒、常驻岛为什么被隐藏。复制之后可以直接贴给我。", 13f, COLOR_SECONDARY, false);
+        diagDesc.setLineSpacing(dp(3), 1f);
+        helpHeader(diagCard, "保活诊断", FOLD_ALWAYS_ON, diagDesc);
+        diagText = text(Diag.text(this), 12f, 0xFFB8B8C2, false);
+        diagText.setTypeface(Typeface.MONOSPACE);
+        diagText.setTextIsSelectable(true);
+        addFill(diagCard, diagText, 10);
+        LinearLayout diagRow = new LinearLayout(this);
+        diagRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button copyButton = button("复制诊断", v -> copyDiag());
+        copyButton.setTextSize(13f);
+        Button clearButton = button("清空记录", v -> {
+            Diag.clear(this);
+            refreshDiag();
+        });
+        clearButton.setTextSize(13f);
+        LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyParams.rightMargin = dp(8);
+        diagRow.addView(copyButton, copyParams);
+        diagRow.addView(clearButton, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        addFill(diagCard, diagRow, 12);
+        addFill(root, diagCard, 10);
 
         LinearLayout featuresCard = card();
         addFill(featuresCard, text(R.string.settings_title, 16f, COLOR_PRIMARY, true), 0);
@@ -264,8 +295,25 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshState();
+        refreshDiag();
         syncPrimaries();
         restoreIfWanted();
+    }
+
+    /** Re-reads the diagnostic log; the screen is reused, so this runs on every resume. */
+    private void refreshDiag() {
+        if (diagText != null) {
+            diagText.setText(Diag.text(this));
+        }
+    }
+
+    /** Copies the log, because retyping it from a screenshot is not a thing anybody should do. */
+    private void copyDiag() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("island diag", Diag.text(this)));
+        }
+        Toast.makeText(this, "诊断已复制", Toast.LENGTH_SHORT).show();
     }
 
     /**

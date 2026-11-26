@@ -276,15 +276,22 @@ courier is kept rather than dropped. Outside that card:
    started from the background.
 8. Android 13+ asks for `POST_NOTIFICATIONS` so the foreground service can show its status
    notification.
-9. **Battery optimisation** (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, optional), plus 自启动 and
-   an unrestricted 省电策略 in the MIUI app page. Android 12+ refuses to start a foreground service
-   from the background, so the watchdog only brings the island back while the app is exempt.
-   Leaving the app now counts: `onTaskRemoved` queues the watchdog **and** a persisted one-shot
-   `JobScheduler` job for 10 s later, and a service destroyed while the switch is still on does the
-   same, so the usual gap between being killed and coming back is seconds instead of 15 minutes.
-   The 后台常驻 card shows the state, and its 打开「自启动」设置 button jumps straight to the MIUI
-   auto-start screen (falling back to the app page). `RECEIVE_BOOT_COMPLETED` (no prompt) restores
-   the island after a reboot, and only if you had it running. A 强行停止 still cancels everything:
+9. **Battery optimisation** (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, optional), plus 自启动, an
+   unrestricted 省电策略 and 设置 → 省电与电池 → 「锁屏后清理内存」 = 永不 in MIUI; locking the card in
+   the recent tasks helps as well. Android 12+ refuses to start a foreground service from the
+   background, and refuses it silently, so the revival runs on two clocks: `onTaskRemoved` — and a
+   service destroyed while the switch is still on — queues an **alarm eight seconds out** and a
+   persisted one-shot job ten seconds out, and the fifteen-minute watchdog stays behind both. The
+   alarm is the reliable one: delivering a broadcast puts the app on the temporary allow-list for
+   a few seconds, which is exactly what the restart needs. A refused attempt is not dropped; it
+   re-arms itself after 30 s, 60 s, 3 min, 10 min and then every 15 minutes. The 后台常驻 card has
+   a button that opens the MIUI 自启动 screen (falling back to the app page), and the 保活诊断 card
+   below it prints the last sixty moments — task removed, alarm fired, launch refused, and why the
+   standby pill was hidden — with a copy button, because "it did not come back" is not something
+   anybody should have to describe from memory. The launcher test also forgets a "another app is
+   in front" answer that nothing has refreshed for two minutes, instead of hiding the pill for the
+   rest of the day when a ROM stops delivering usage events. `RECEIVE_BOOT_COMPLETED` (no prompt)
+   restores the island after a reboot, and only if it was on. A 强行停止 still cancels everything:
    nothing an app schedules survives that, which is the system's design and not a bug.
 
 ## What it is not

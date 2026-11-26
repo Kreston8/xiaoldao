@@ -1159,7 +1159,15 @@ final class StandbyView extends FrameLayout {
                         continue;
                     }
                     homeState = homes.contains(pkg);
+                    homeStateAt = now;
                 }
+            }
+            if (homeState != null && !homeState && now - homeStateAt > STALE_MS) {
+                // "Another app is in front" that nothing has refreshed for two minutes is not a fact
+                // any more: vendor ROMs drop usage events whenever they like, and a pill that stays
+                // hidden for the rest of the day is worse than one that shows up over the wrong
+                // screen. Forgetting the answer sends the next poll back to the safe default.
+                homeState = null;
             }
             return homeState == null || homeState;
         } catch (Throwable ignored) {
@@ -1170,6 +1178,10 @@ final class StandbyView extends FrameLayout {
     /** Last answer about the launcher, kept across polls so a quiet window changes nothing. */
     private static Boolean homeState;
     private static long homeCheckedAt;
+    private static long homeStateAt;
+
+    /** How long a "not the launcher" answer is trusted before it is thrown away. */
+    private static final long STALE_MS = 120_000L;
 
     private static Set<String> homePackages(Context context) {
         Set<String> homes = new HashSet<>();
