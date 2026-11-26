@@ -361,13 +361,26 @@ final class Prefs {
      * <p>Items that a later version added are appended rather than dropped, so an install that
      * predates the air-quality chip keeps its old order and gains the new item at the end.
      */
+    /** Whether one standby item name is still shipped by this build. */
+    private static boolean isKnownItem(String item) {
+        for (String known : ORDER_DEFAULT) {
+            if (known.equals(item)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static String[] order(Context context) {
         java.util.List<String> items = new java.util.ArrayList<String>();
         String raw = text(context, KEY_STANDBY_ORDER);
         if (!raw.isEmpty()) {
             for (String part : raw.split(",")) {
                 String item = part == null ? "" : part.trim();
-                if (!item.isEmpty() && !items.contains(item)) {
+                // An item a later build stopped shipping is dropped, not kept: the settings
+                // screen used to render every unknown name as its last-resort label, which is
+                // how 「每日一句」 ended up listed twice on installs that predate 2.16.
+                if (isKnownItem(item) && !items.contains(item)) {
                     items.add(item);
                 }
             }

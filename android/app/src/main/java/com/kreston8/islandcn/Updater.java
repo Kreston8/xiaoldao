@@ -180,6 +180,9 @@ final class Updater {
      * activity start refused because the app is in the background.
      */
     static void install(Context context) {
+        // From a visible screen the installer is started by that Activity, which no ROM blocks.
+        // From the background it needs NEW_TASK, and the 「悬浮窗」 grant is what lets it through.
+        final boolean fromScreen = context instanceof android.app.Activity;
         final Context app = context.getApplicationContext() == null
                 ? context : context.getApplicationContext();
         File file = apk(app);
@@ -196,9 +199,12 @@ final class Updater {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(Uri.parse("content://" + AUTHORITY + "/" + APK),
                 "application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        if (!fromScreen) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
         try {
-            app.startActivity(intent);
+            (fromScreen ? context : app).startActivity(intent);
             Diag.note(app, "已打开系统安装器");
         } catch (Throwable error) {
             Diag.note(app, "打不开安装器：" + error.getClass().getSimpleName());
@@ -225,7 +231,7 @@ final class Updater {
             JSONArray list = new JSONArray(get(API));
             int[] best = null;
             String tag = null;
-            String url = null;
+            String[] links = null;
             for (int i = 0; i < list.length(); i++) {
                 JSONObject item = list.optJSONObject(i);
                 if (item == null) {
@@ -239,15 +245,15 @@ final class Updater {
                 if (version == null || (best != null && !newer(version, best))) {
                     continue;
                 }
-                String link = asset(item);
+                String[] link = asset(item);
                 if (link == null) {
                     continue;
                 }
                 best = version;
                 tag = candidate;
-                url = link;
+                links = link;
             }
-            if (tag == null || url == null) {
+            if (tag == null || links == null) {
                 Diag.note(app, "检查更新：没找到可用的安装包");
                 say(listener, "没有找到可下载的安装包", false);
                 return;
@@ -262,20 +268,27 @@ final class Updater {
             }
             say(listener, "发现 " + newest + "，正在下载…", false);
             File file = apk(app);
-            download(url, file);
+            download(app, links, file);
             Prefs.setText(app, Prefs.KEY_UPDATE_TAG, tag);
             Diag.note(app, (auto ? "自动更新" : "检查更新") + "：已下载 " + newest
                     + "（" + (file.length() / 1024L) + " KB）");
             say(listener, "已下载 " + newest + "，正在打开系统安装器…", true);
             install(app);
         } catch (Throwable error) {
-            Diag.note(app, "检查更新失败：" + error.getClass().getSimpleName());
-            say(listener, "检查失败：" + error.getClass().getSimpleName(), false);
+            Diag.note(app, "检查更新失败：" + brief(error));
+            say(listener, "检查失败：" + brief(error), false);
         }
     }
 
-    /** The first {@code .apk} asset of one release, or null when a release has no build. */
-    private static String asset(JSONObject item) {
+    /**
+     * The URLs to try for the first {@code .apk} asset of one release, best first, or null.
+     *
+     * <p>Two of them, because they fail differently. The {@code /releases/assets/{id}} form is
+     * answered by {@code api.github.com} itself, the host the app already used a moment ago to
+     * read the list; {@code browser_download_url} starts at {@code github.com}, which some
+     * networks reset. Whichever answers first with a real zip wins.
+     */
+    private static String[] asset(JSONObject item) {
         JSONArray assets = item.optJSONArray("assets");
         for (int a = 0; assets != null && a < assets.length(); a++) {
             JSONObject entry = assets.optJSONObject(a);
@@ -286,9 +299,14 @@ final class Updater {
             if (name == null || !name.toLowerCase(Locale.US).endsWith(".apk")) {
                 continue;
             }
-            String link = entry.optString("browser_download_url", "");
-            if (link != null && link.length() > 0) {
-                return link;
+            String browser = entry.optString("browser_download_url", "");
+            long id = entry.optLong("id", 0L);
+            if (id > 0L) {
+                String api = "https://api.github.com/repos/Kreston8/xiaoldao/releases/assets/" + id;
+                return browser.length() > 0 ? new String[]{api, browser} : new String[]{api};
+            }
+            if (browser.length() > 0) {
+                return new String[]{browser};
             }
         }
         return null;
@@ -321,54 +339,153 @@ final class Updater {
     }
 
     /**
-     * Downloads one file next to the target and renames it in place, so a half-written package can
-     * never be handed to the installer.
+     * Fetches the package, trying every URL the API offered, three times each.
+     *
+     * <p>Three because a single reset says nothing about the next second on a mobile network, and
+     * every attempt leaves a line in the log naming the host and the error, so a failure that only
+     * happens on the phone stops being invisible.
      */
-    private static void download(String from, File to) throws Exception {
-        HttpURLConnection connection = open(from);
-        try {
-            connection.setRequestProperty("Accept", "application/octet-stream");
-            int code = connection.getResponseCode();
-            if (code != HttpURLConnection.HTTP_OK) {
-                throw new IllegalStateException("HTTP " + code);
-            }
-            File part = new File(to.getParentFile(), APK + ".part");
-            InputStream in = connection.getInputStream();
-            try {
-                FileOutputStream out = new FileOutputStream(part);
+    private static void download(Context app, String[] urls, File to) throws Exception {
+        Throwable last = null;
+        for (String url : urls) {
+            for (int attempt = 1; attempt <= 3; attempt++) {
                 try {
-                    byte[] buffer = new byte[16 * 1024];
-                    int read;
-                    while ((read = in.read(buffer)) > 0) {
-                        out.write(buffer, 0, read);
+                    fetch(url, to);
+                    if (attempt > 1) {
+                        Diag.note(app, "下载：第 " + attempt + " 次成功（" + host(url) + "）");
                     }
-                    out.flush();
-                } finally {
-                    out.close();
+                    return;
+                } catch (Throwable error) {
+                    last = error;
+                    Diag.note(app, "下载失败（" + host(url) + " 第 " + attempt + " 次）："
+                            + brief(error));
                 }
-            } finally {
-                in.close();
             }
-            if (part.length() < MIN_APK) {
-                part.delete();
-                throw new IllegalStateException("安装包不完整");
-            }
-            if (to.exists() && !to.delete()) {
-                throw new IllegalStateException("旧安装包删不掉");
-            }
-            if (!part.renameTo(to)) {
-                throw new IllegalStateException("安装包存不下来");
-            }
-        } finally {
-            connection.disconnect();
         }
+        if (last instanceof Exception) {
+            throw (Exception) last;
+        }
+        throw new IllegalStateException(last == null ? "没有可用的下载地址" : String.valueOf(last));
+    }
+
+    /**
+     * One request, following redirects by hand, then renaming the finished file into place.
+     *
+     * <p>By hand, because {@link HttpURLConnection} hides the hop it took: when GitHub answers
+     * 302 to {@code release-assets.githubusercontent.com} and the network drops that host, a
+     * silent follow makes the app look broken instead of the network. Following it here lets the
+     * log name the host that actually failed. The body is only accepted if it starts with
+     * {@code PK}, which is what separates a package from an error page that answered 200.
+     */
+    private static void fetch(String from, File to) throws Exception {
+        String url = from;
+        for (int hop = 0; hop < 6; hop++) {
+            HttpURLConnection connection = open(url);
+            try {
+                int code = connection.getResponseCode();
+                if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                    String next = connection.getHeaderField("Location");
+                    if (next == null || next.length() == 0) {
+                        throw new IllegalStateException("HTTP " + code + " 没有跳转地址");
+                    }
+                    url = next.startsWith("http") ? next : new URL(new URL(url), next).toString();
+                    continue;
+                }
+                if (code != HttpURLConnection.HTTP_OK) {
+                    throw new IllegalStateException("HTTP " + code);
+                }
+                File part = new File(to.getParentFile(), APK + ".part");
+                InputStream in = connection.getInputStream();
+                try {
+                    FileOutputStream out = new FileOutputStream(part);
+                    try {
+                        byte[] buffer = new byte[16 * 1024];
+                        int read;
+                        while ((read = in.read(buffer)) > 0) {
+                            out.write(buffer, 0, read);
+                        }
+                        out.flush();
+                    } finally {
+                        out.close();
+                    }
+                } finally {
+                    in.close();
+                }
+                if (part.length() < MIN_APK) {
+                    part.delete();
+                    throw new IllegalStateException("安装包不完整：" + part.length() + " 字节");
+                }
+                if (!isPackage(part)) {
+                    part.delete();
+                    throw new IllegalStateException("下载到的不是安装包");
+                }
+                if (to.exists() && !to.delete()) {
+                    throw new IllegalStateException("旧安装包删不掉");
+                }
+                if (!part.renameTo(to)) {
+                    throw new IllegalStateException("安装包存不下来");
+                }
+                return;
+            } finally {
+                connection.disconnect();
+            }
+        }
+        throw new IllegalStateException("跳转次数太多");
+    }
+
+    /** An APK is a zip: the first two bytes have to be {@code PK}, whatever the headers claim. */
+    private static boolean isPackage(File file) {
+        java.io.FileInputStream in = null;
+        try {
+            in = new java.io.FileInputStream(file);
+            return in.read() == 'P' && in.read() == 'K';
+        } catch (Throwable error) {
+            return false;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                    // A failed close on a handle we are done with changes nothing.
+                }
+            }
+        }
+    }
+
+    /** Just the host of a URL, for the log. */
+    private static String host(String url) {
+        if (url == null) {
+            return "?";
+        }
+        try {
+            String value = new URL(url).getHost();
+            return value == null ? url : value;
+        } catch (Throwable error) {
+            return url;
+        }
+    }
+
+    /** A class name plus the head of its message, which is the part that names the cause. */
+    private static String brief(Throwable error) {
+        String name = error.getClass().getSimpleName();
+        String text = error.getMessage();
+        if (text == null || text.length() == 0) {
+            return name;
+        }
+        if (text.length() > 90) {
+            text = text.substring(0, 90);
+        }
+        return name + " " + text;
     }
 
     private static HttpURLConnection open(String url) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setConnectTimeout(CONNECT_MS);
         connection.setReadTimeout(READ_MS);
-        connection.setInstanceFollowRedirects(true);
+        // Redirects are followed by hand in fetch(), which is also what names the failing host.
+        connection.setInstanceFollowRedirects(false);
+        // Never let a proxy hand back gzip: the body is written to disk as bytes, not decoded.
+        connection.setRequestProperty("Accept-Encoding", "identity");
         connection.setUseCaches(false);
         connection.setRequestProperty("User-Agent", "xiaoldao-updater");
         return connection;

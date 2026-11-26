@@ -57,6 +57,10 @@ public final class MainActivity extends Activity {
     private int COLOR_MONO;
     private int COLOR_BUTTON;
     private int COLOR_STROKE;
+    /** Fixed accents that read the same on both palettes: the sun, the moon, a filled button. */
+    private int COLOR_SUN;
+    private int COLOR_MOON;
+    private int COLOR_ACCENT;
     /** True while the light palette is in force; the switch in the title bar mirrors it. */
     private boolean lightTheme;
     /** Fold key for the always-on card, which has a literal title rather than a string id. */
@@ -146,14 +150,18 @@ public final class MainActivity extends Activity {
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
         }
+        View rule = new View(this);
+        rule.setBackgroundColor(COLOR_HELP);
+        screen.addView(rule, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
         screen.addView(tabBar(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
 
         // The cards below are written in one run of code but belong to four pages, so the
         // current page column is simply re-pointed before each card is added.
         LinearLayout root = columns[PAGE_PERMS];
-        addFill(root, text("「悬浮窗」是必须的，其余四项都可以不给，只是对应的功能会缺席。"
-                + "每次授权完回到这里，状态会自动重新读一遍。", 12f, COLOR_HINT, false), 2);
+        pageHeader(root, "权限", "「悬浮窗」是必须的，其余四项都可以不给，只是对应的功能会缺席。"
+                + "每次授权完回到这里，状态会自动重新读一遍。");
 
         LinearLayout overlayCard = permCard(R.string.perm_overlay_title, R.string.perm_overlay_desc, 0,
                 v -> Perms.openOverlaySettings(this));
@@ -181,6 +189,7 @@ public final class MainActivity extends Activity {
         addFill(root, usageCard, 10);
 
         root = columns[PAGE_ISLAND];
+        pageHeader(root, "岛", "屏幕顶部那颗胶囊：通知、验证码、取件码、外卖、待办、音乐都在这里。");
         TextView subtitle = text(R.string.setup_subtitle, 12f, COLOR_HINT, false);
         subtitle.setLineSpacing(dp(3), 1f);
         addFill(root, foldRow("怎么用（单击 / 双击 / 左右滑 / 上滑 / 长按）", FOLD_HELP,
@@ -208,24 +217,26 @@ public final class MainActivity extends Activity {
         addFill(root, serviceCard, 10);
 
         root = columns[PAGE_SETTINGS];
+        pageHeader(root, "设置", "版本与更新、后台常驻、保活诊断。");
         // Version, update buttons, and the changelog fold. The fold starts closed, which is the
         // whole point of it: the page should not open on a wall of release notes.
         LinearLayout updateCard = card();
         LinearLayout versionRow = new LinearLayout(this);
         versionRow.setOrientation(LinearLayout.HORIZONTAL);
         versionRow.setGravity(Gravity.CENTER_VERTICAL);
-        versionRow.addView(text("当前版本", 16f, COLOR_PRIMARY, true),
+        versionRow.addView(text("当前版本", 13f, COLOR_HINT, false),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        versionRow.addView(text(Updater.label(this), 14f, COLOR_SECONDARY, false),
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView versionValue = text(Updater.label(this), 17f, COLOR_PRIMARY, true);
+        versionValue.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        versionRow.addView(versionValue, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         addFill(updateCard, versionRow, 0);
         updateState = text("还没有检查过更新", 13f, COLOR_SECONDARY, false);
         updateState.setLineSpacing(dp(3), 1f);
         addFill(updateCard, updateState, 8);
         LinearLayout updateRow = new LinearLayout(this);
         updateRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button checkButton = button("检查更新", v -> checkUpdate());
+        Button checkButton = primaryButton("检查更新", v -> checkUpdate());
         checkButton.setTextSize(13f);
         installButton = button("安装已下载", v -> Updater.install(this));
         installButton.setTextSize(13f);
@@ -382,8 +393,7 @@ public final class MainActivity extends Activity {
         addFill(root, lookCard, 10);
 
         root = columns[PAGE_STANDBY];
-        addFill(root, text("常驻岛是桌面上那颗小药丸，只在桌面显示；主岛仍然是屏幕顶部的胶囊。",
-                12f, COLOR_HINT, false), 2);
+        pageHeader(root, "常驻", "常驻岛是桌面上那颗小药丸，只在桌面显示；主岛仍然是屏幕顶部的胶囊。");
 
         LinearLayout standbyCard = card();
         addFill(standbyCard, text(R.string.label_standby, 16f, COLOR_PRIMARY, true), 0);
@@ -839,13 +849,21 @@ public final class MainActivity extends Activity {
             toggle.setOnCheckedChangeListener((button, checked) -> Prefs.set(this, key, checked));
             row.addView(toggle, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            TextView label = text(labelOf(item), 13f, COLOR_PRIMARY, false);
+            TextView label = text(labelOf(item), 14f, COLOR_PRIMARY, false);
             label.setPadding(dp(8), 0, 0, 0);
             row.addView(label, new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             row.addView(smallButton(R.string.standby_move_up, v -> move(index, -1)));
             row.addView(smallButton(R.string.standby_move_down, v -> move(index, 1)));
             addFill(standbyRows, row, 8);
+            if (i < order.length - 1) {
+                View rule = new View(this);
+                rule.setBackgroundColor(COLOR_HELP);
+                LinearLayout.LayoutParams ruleParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+                ruleParams.topMargin = dp(10);
+                standbyRows.addView(rule, ruleParams);
+            }
         }
     }
 
@@ -1007,6 +1025,23 @@ public final class MainActivity extends Activity {
             alphaValue.setText(getString(R.string.look_alpha_fmt, percent));
         }
         Look.ping(this);
+    }
+
+    /** The filled button on a card: reads as the thing to tap, not as one option among two. */
+    private Button primaryButton(CharSequence label, View.OnClickListener listener) {
+        Button button = button(label, listener);
+        button.setTextColor(0xFFFFFFFF);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setBackground(rounded(COLOR_ACCENT, 13f));
+        return button;
+    }
+
+    /** The title block every page opens with, so the four pages read as one app. */
+    private void pageHeader(LinearLayout root, String title, String note) {
+        addFill(root, text(title, 22f, COLOR_PRIMARY, true), 2);
+        TextView sub = text(note, 12f, COLOR_HINT, false);
+        sub.setLineSpacing(dp(3), 1f);
+        addFill(root, sub, 6);
     }
 
     private Button smallButton(int resId, View.OnClickListener listener) {
@@ -1252,33 +1287,70 @@ public final class MainActivity extends Activity {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setBackgroundColor(COLOR_BG);
+        bar.setPadding(dp(14), 0, dp(14), 0);
 
-        View leftPad = new View(this);
-        bar.addView(leftPad, new LinearLayout.LayoutParams(dp(64), dp(1)));
+        // Empty slot of the same width as the theme pill, so the name is dead centre on every ROM.
+        View slot = new View(this);
+        bar.addView(slot, new LinearLayout.LayoutParams(dp(72), dp(1)));
 
-        TextView title = text(R.string.app_name, 18f, COLOR_PRIMARY, true);
+        TextView title = text(R.string.app_name, 19f, COLOR_PRIMARY, true);
         title.setGravity(Gravity.CENTER);
         bar.addView(title, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        Switch night = new Switch(this);
-        night.setChecked(lightTheme);
-        night.setContentDescription("白天 / 黑夜主题");
-        // Checked first, listener second: otherwise building the bar would fire a recreate().
-        night.setOnCheckedChangeListener((toggle, checked) -> {
-            if (checked == lightTheme) {
-                return;
-            }
-            Prefs.set(this, Prefs.KEY_LIGHT_THEME, checked);
-            recreate();
-        });
         LinearLayout holder = new LinearLayout(this);
         holder.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-        holder.addView(night, new LinearLayout.LayoutParams(
+        holder.addView(themePill(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        bar.addView(holder, new LinearLayout.LayoutParams(dp(64),
+        bar.addView(holder, new LinearLayout.LayoutParams(dp(72),
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         return bar;
+    }
+
+    /**
+     * The theme choice as a sun and a moon, not as a switch.
+     *
+     * <p>A switch says "on" and "off", which on its own never says which side is which; tapping
+     * the sun for the light page and the moon for the dark one needs no label. The chosen half
+     * sits on a lit chip in its own colour, the other half stays grey.
+     */
+    private View themePill() {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER_VERTICAL);
+        pill.setPadding(dp(3), dp(3), dp(3), dp(3));
+        pill.setBackground(rounded(COLOR_HELP, 15f));
+
+        TextView sun = themeSegment("\u2600", lightTheme, COLOR_SUN, "白天");
+        TextView moon = themeSegment("\u263E", !lightTheme, COLOR_MOON, "黑夜");
+        sun.setOnClickListener(v -> switchTheme(true));
+        moon.setOnClickListener(v -> switchTheme(false));
+        pill.addView(sun, new LinearLayout.LayoutParams(dp(29), dp(26)));
+        pill.addView(moon, new LinearLayout.LayoutParams(dp(29), dp(26)));
+        return pill;
+    }
+
+    /** One half of {@link #themePill()}: a lit chip when it is the palette in force. */
+    private TextView themeSegment(String glyph, boolean on, int accent, String name) {
+        TextView view = new TextView(this);
+        view.setText(glyph);
+        view.setTextSize(15f);
+        view.setGravity(Gravity.CENTER);
+        view.setTextColor(on ? accent : COLOR_HINT);
+        view.setContentDescription(name);
+        if (on) {
+            view.setBackground(rounded(lightTheme ? 0xFFFFFFFF : 0xFF34343F, 12f));
+        }
+        return view;
+    }
+
+    /** Stores the choice and rebuilds the screen, because every colour is read from it. */
+    private void switchTheme(boolean light) {
+        if (light == lightTheme) {
+            return;
+        }
+        Prefs.set(this, Prefs.KEY_LIGHT_THEME, light);
+        recreate();
     }
 
     /** The bottom tab bar: four equal cells, the current one ringed and bold. */
@@ -1286,14 +1358,14 @@ public final class MainActivity extends Activity {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(8), 0, dp(8), 0);
+        bar.setPadding(dp(8), dp(6), dp(8), dp(6));
         bar.setBackgroundColor(COLOR_CARD);
         tabs = new TextView[PAGE_COUNT];
         for (int i = 0; i < PAGE_COUNT; i++) {
             final int index = i;
-            TextView tab = text(PAGE_NAMES[i], 13f, COLOR_SECONDARY, false);
+            TextView tab = text(PAGE_NAMES[i], 13.5f, COLOR_HINT, false);
             tab.setGravity(Gravity.CENTER);
-            tab.setPadding(dp(4), dp(9), dp(4), dp(9));
+            tab.setPadding(dp(4), dp(10), dp(4), dp(10));
             tab.setOnClickListener(v -> showPage(index));
             bar.addView(tab, new LinearLayout.LayoutParams(0,
                     LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -1311,9 +1383,9 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < PAGE_COUNT; i++) {
             pages[i].setVisibility(i == index ? View.VISIBLE : View.GONE);
             boolean on = i == index;
-            tabs[i].setTextColor(on ? COLOR_PRIMARY : COLOR_SECONDARY);
+            tabs[i].setTextColor(on ? COLOR_PRIMARY : COLOR_HINT);
             tabs[i].setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-            tabs[i].setBackground(on ? rounded(COLOR_HELP, 12f) : null);
+            tabs[i].setBackground(on ? rounded(COLOR_HELP, 15f) : null);
         }
         if (index == PAGE_SETTINGS) {
             refreshDiag();
@@ -1344,6 +1416,9 @@ public final class MainActivity extends Activity {
         COLOR_MONO = lightTheme ? 0xFF33333B : 0xFFB8B8C2;
         COLOR_BUTTON = lightTheme ? 0xFFECECF2 : 0xFF23232B;
         COLOR_STROKE = lightTheme ? 0xFFC8C8D1 : 0xFF3C3C46;
+        COLOR_SUN = 0xFFF0A03C;
+        COLOR_MOON = 0xFF7C8CE0;
+        COLOR_ACCENT = lightTheme ? 0xFF2F6FE0 : 0xFF4C8DFF;
         getWindow().setStatusBarColor(COLOR_BG);
         getWindow().setNavigationBarColor(COLOR_BG);
         View decor = getWindow().getDecorView();
@@ -1366,8 +1441,11 @@ public final class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setBackground(rounded(COLOR_CARD, 18f));
-        layout.setPadding(dp(14), dp(14), dp(14), dp(14));
+        layout.setBackground(rounded(COLOR_CARD, 20f));
+        layout.setPadding(dp(16), dp(15), dp(16), dp(15));
+        // One hair of lift: on the light palette it separates white cards from the grey page,
+        // on the night palette it costs nothing measurable.
+        layout.setElevation(dp(1f));
         return layout;
     }
 
@@ -1380,8 +1458,10 @@ public final class MainActivity extends Activity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextColor(COLOR_PRIMARY);
-        button.setBackground(rounded(COLOR_BUTTON, 12f));
-        button.setPadding(dp(18), dp(8), dp(18), dp(8));
+        button.setBackground(rounded(COLOR_BUTTON, 13f));
+        button.setPadding(dp(18), dp(9), dp(18), dp(9));
+        button.setMinHeight(dp(44));
+        button.setMinimumHeight(dp(44));
         button.setOnClickListener(listener);
         return button;
     }
