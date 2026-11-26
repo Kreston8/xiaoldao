@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or update (leave empty for xiaoldao-v2.24.<run number>)"
+        description: "Release tag to create or update (leave empty for xiaoldao-v2.25.<run number>)"
         required: false
         default: ""
   push:
@@ -67,7 +67,7 @@ jobs:
           VERSION_CODE=$((1000 + ${{ github.run_number }}))
           gradle assembleRelease --no-daemon --stacktrace \
             -PversionCode="$VERSION_CODE" \
-            -PversionName="2.24.${{ github.run_number }}"
+            -PversionName="2.25.${{ github.run_number }}"
 
       # Advisory only: the artifact is verified locally afterwards, this just says which key signed it.
       - name: Check the signing certificate
@@ -84,7 +84,7 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk \
-          "dist/xiaoldao-2.24.${{ github.run_number }}.apk"
+          "dist/xiaoldao-2.25.${{ github.run_number }}.apk"
           ls -l dist
           unzip -l dist/*.apk | head -30
 
@@ -98,7 +98,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.24.${{ github.run_number }}"; fi
+          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.25.${{ github.run_number }}"; fi
           cat > notes.md <<'NOTES'
           ## English
 
@@ -106,9 +106,9 @@ jobs:
           小灵岛 (xiaoldao) is a notification island for Android: a black pill at the top of the screen that opens for messages, verification codes, pickup codes, deliveries, calls, alarms and the 网易云音乐 player with line-by-line lyrics, plus a small standby pill on the home screen with the clock, the temperature and the weather. Plain Java, two overlay windows, no WebView.
 
           **What is new in this build**
-          - **预览效果 now puts the real pill on the screen.** It comes up at the top of the screen with this app behind it — the same window, the same card, the same gestures as a notification that really arrived. The island deliberately draws only while the launcher is in front, so the button sends a command of its own that skips that one test, for one sample card, and changes nothing else.
-          - **One button, two states.** Closed it reads 预览效果 in an outline; open it reads 关闭预览 as a filled accent with a bolder label, so it is clear at a glance which side of the switch you are on. Tapping again takes the pill down.
-          - **The preview leaves with the page, and starts what it needs.** If the island was off, pressing the button starts it — and stopping the preview stops it again, so nothing is left running for a sample. Leaving the page takes the preview down too: a sample verification code should not follow you into the next app with no button left on screen to switch it off.
+          - **The pill is desktop-only, for real this time.** Lyrics and the standby clock used to keep drawing after the launcher was left: the "another app is in front" answer was thrown away after two minutes, and a quiet usage window was then read as "the desktop, probably". That answer is kept now until something contradicts it, so a chat left open gets nothing, and a mini program or mini game — which never resumes an activity of its own — can no longer keep a lyric line on top of itself either.
+          - **Only a call or an alarm may interrupt another app.** Every other card waits for the launcher, and a card that arrived on the desktop is kept rather than dropped, so it is back the moment the desktop is. 小灵岛's own screen counts as "not the desktop" and says so from its lifecycle, where the answer is exact instead of a usage event that may arrive late.
+          - **Fixed: the update download fought its own first URL.** The asset endpoint answers with the file only when the client asks for bytes; without that header it answered 200 with the asset's JSON, which failed the zip check and used up three attempts before the fallback host was even tried. The download now asks for bytes, compares the received length with the promised one so a half-download cannot reach the installer, alternates the two hosts per round, and waits between rounds instead of retrying in the same instant.
 
           **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS. Two of the four MIUI steps are buttons on the 后台常驻 card (自启动, 电池优化), the other two are in MIUI's own settings. Limits worth knowing: Android 12 and newer normally forbids starting a foreground service from the background, which is why the fast path is an alarm rather than only a job; a 强行停止 still cancels everything — alarms, jobs, sticky service — and that is the system's design, nothing an app schedules survives it; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Eight hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics, api.github.com for the release list and the package itself, github.com only as the fallback download link, and objects.githubusercontent.com / release-assets.githubusercontent.com for the redirect GitHub hands back. With every switch off the app makes no request at all. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md) · [中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md)
 
@@ -118,9 +118,9 @@ jobs:
           小灵岛是一个 Android 通知岛：屏幕顶部一颗黑色胶囊，为消息、验证码、取件码、快递、来电、闹钟和网易云音乐（带逐行歌词）弹开；桌面上还有一个更小的常驻药丸，显示时钟、气温和天气。纯 Java，两个 overlay 窗口，没有 WebView。
 
           **本次更新**
-          - **「预览效果」现在把真的岛放到屏幕顶部。** 就在本应用之上：同一个窗口、同一张卡片、同一套手势，和真的来了通知时一模一样。岛平时只在桌面显示，所以这个按钮走一条单独的指令，只对预览这一张样例卡跳过那一次判定，别的什么都不改。
-          - **一个按钮，两种样子。** 收起时是描边的「预览效果」；打开后变成实心的「关闭预览」，字也更重，一眼看得出现在哪一边。再点一次就收起来。
-          - **预览跟着页面走，也会启动它需要的东西。** 岛原本没开的话，点预览会顺带把服务启动；关掉预览再把它停回去，不会为了一张样例卡一直留着。离开这一页预览自动收起——一张假的验证码不该跟着你进下一个应用，屏幕上却已经没有按钮可以把它关掉。
+          - **岛现在真的只认桌面。** 歌词和常驻时钟以前会在离开桌面后继续画：「别的应用在前台」这个结论两分钟没人刷新就被丢掉，而一个空的事件窗口于是被当成「大概是桌面」。现在这个结论一直留着，直到有东西推翻它——所以一直开着的聊天界面什么都不会出现，而小游戏 / 小程序不新开自己的 Activity，也不再让一行歌词压在上面。
+          - **只有来电和闹钟可以打断别的应用。** 其余卡片一律等回到桌面；已经在桌面收到的卡片是收起来而不是丢掉，回到桌面立刻还你。小灵岛自己那一页也算「不是桌面」，而且是从生命周期直接说的——那里是准的，不用等一条可能迟到的用量事件。
+          - **修：下载更新在跟自己的第一个地址打架。** 取安装包的接口只有在你明确要二进制时才回那个跳转，不要的话它会回一段资产 JSON——那段 JSON 过不了 zip 检查，还白白用掉三次重试，才轮到备用地址。现在请求里写明了要二进制，收到多少字节和服务器说的长度对一遍（半截包到不了安装器），每一轮轮换两个地址，并在轮次之间等一会儿，而不是同一瞬间连着重试。
 
           **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS。「后台常驻」卡片上有两个按钮直达其中两步（自启动、电池优化），另外两步在 MIUI 自己的设置里。要提前知道的限制：Android 12 起默认禁止后台启动前台服务，所以快的那条路是闹钟而不是只用 job；「强行停止」仍然会清掉一切——闹钟、job、粘性服务全没了——这是系统的设计，应用排的任何任务都活不过它；待办卡片直接读小米笔记、需要 root，因为它不提供 provider；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问八个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）、music.163.com（联网歌词）、api.github.com（release 列表与更新包本身）、github.com（只在备用下载链接时访问）与 objects.githubusercontent.com / release-assets.githubusercontent.com（GitHub 跳转后的实际地址）；所有开关都关掉时一次请求都不发。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md)
           NOTES

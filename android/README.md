@@ -235,8 +235,11 @@ nothing collapses.
 Removing the notification from the shade still hides the island. The music card never times out: it
 keeps the karaoke line ticking, and it goes away only when the track stops, when you swipe it off, or
 when another app comes to the front. Returning to the desktop brings it straight back: the foreground
-answer is cached, because `UsageEvents` reports *changes*, so an empty window means "nothing moved", not
-"nothing is in front" — treating it as the latter hid the card a few seconds after it appeared.
+answer is kept, because `UsageEvents` reports *changes*, so an empty window means "nothing moved", not
+"nothing is in front" — treating it as the latter hid the card a few seconds after it appeared. It is
+forgotten only when there is a reason to look again, which is the screen coming back on or this app's
+own screen closing; a two-minute timer used to do it, and that timer is why the strip stayed on top of
+an app that had been open for a while.
 The line itself is kept honest by trusting the player only as far as it is trustworthy: the
 position is extrapolated while `getLastPositionUpdateTime()` is plausible, the card re-anchors
 when the reported position drifts more than 700 ms from the running estimate, LRC `[offset:±ms]`
@@ -303,9 +306,11 @@ courier is kept rather than dropped. Outside that card:
    a button that opens the MIUI 自启动 screen (falling back to the app page), and the 保活诊断 card
    below it prints the last sixty moments — task removed, alarm fired, launch refused, and why the
    standby pill was hidden — with a copy button, because "it did not come back" is not something
-   anybody should have to describe from memory. The launcher test also forgets a "another app is
-   in front" answer that nothing has refreshed for two minutes, instead of hiding the pill for the
-   rest of the day when a ROM stops delivering usage events. `RECEIVE_BOOT_COMPLETED` (no prompt)
+   anybody should have to describe from memory. The launcher test keeps its "another app is in
+   front" answer until something contradicts it — the screen came back on, or 小灵岛's own screen
+   closed — instead of throwing it away on a two-minute timer. That timer was the bug: a quiet usage
+   window was read as "the desktop, probably", so the pill appeared over an app that had simply been
+   open for a while, and a mini program could never correct it. `RECEIVE_BOOT_COMPLETED` (no prompt)
    restores the island after a reboot, and only if it was on. A 强行停止 still cancels everything:
    nothing an app schedules survives that, which is the system's design and not a bug.
 10. **Install unknown apps** (`REQUEST_INSTALL_PACKAGES`), only for updates: the package
@@ -339,9 +344,9 @@ courier is kept rather than dropped. Outside that card:
   character-by-character light-up is interpolated linearly inside each line: it shows which line is
   being sung and roughly how far into it the singer is, not word accuracy. When the lookup fails or
   the switch is off, that line shows the song name instead.
-- The music strip and the standby pill are **desktop only** and need the **usage access** grant;
-  without it the app cannot tell the launcher from an app, so the strip falls back to showing over any
-  screen and the standby pill never appears.
+- The music strip, the standby pill and the notification cards are all **desktop only**, and they
+  need the **usage access** grant: without it the app cannot tell the launcher from an app, so nothing
+  but a call or an alarm is drawn at all.
 - 天气温度 and 空气质量 AQI need a city typed by hand and hit two hosts on Open-Meteo: `api.open-meteo.com`
   for the forecast and `air-quality-api.open-meteo.com` for the AQI, with
   `geocoding-api.open-meteo.com` turning the name into coordinates.

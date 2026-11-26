@@ -347,18 +347,36 @@ final class Updater {
      */
     private static void download(Context app, String[] urls, File to) throws Exception {
         Throwable last = null;
-        for (String url : urls) {
-            for (int attempt = 1; attempt <= 3; attempt++) {
+        for (int round = 1; round <= 3; round++) {
+            // The order alternates: the two URLs fail for different reasons, so the host that just
+            // failed is tried second on the next round instead of being asked again first.
+            String[] order = urls;
+            if (urls.length > 1 && round % 2 == 0) {
+                order = new String[urls.length];
+                for (int i = 0; i < urls.length; i++) {
+                    order[i] = urls[urls.length - 1 - i];
+                }
+            }
+            for (String url : order) {
                 try {
                     fetch(url, to);
-                    if (attempt > 1) {
-                        Diag.note(app, "下载：第 " + attempt + " 次成功（" + host(url) + "）");
+                    if (round > 1) {
+                        Diag.note(app, "下载：第 " + round + " 轮成功（" + host(url) + "）");
                     }
                     return;
                 } catch (Throwable error) {
                     last = error;
-                    Diag.note(app, "下载失败（" + host(url) + " 第 " + attempt + " 次）："
+                    Diag.note(app, "下载失败（" + host(url) + " 第 " + round + " 轮）："
                             + brief(error));
+                }
+            }
+            // A reset one second ago says nothing about the next second on a mobile network, but
+            // retrying in the same instant turns a blip into a failure.
+            if (round < 3) {
+                try {
+                    Thread.sleep(800L * round);
+                } catch (InterruptedException ignored) {
+                    // Nothing to do here: the loop's own condition still ends it.
                 }
             }
         }
@@ -382,6 +400,13 @@ final class Updater {
         for (int hop = 0; hop < 6; hop++) {
             HttpURLConnection connection = open(url);
             try {
+                if (url.contains("/releases/assets/")) {
+                    // The asset endpoint answers with the 302 that leads to the file only when the
+                    // client asks for bytes. Without this it answers 200 with the asset's JSON,
+                    // which then failed the zip check and burned three attempts before the fallback
+                    // URL was even tried. That is the slow, sometimes failing download, fixed.
+                    connection.setRequestProperty("Accept", "application/octet-stream");
+                }
                 int code = connection.getResponseCode();
                 if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                     String next = connection.getHeaderField("Location");
@@ -394,6 +419,7 @@ final class Updater {
                 if (code != HttpURLConnection.HTTP_OK) {
                     throw new IllegalStateException("HTTP " + code);
                 }
+                long declared = declaredLength(connection);
                 File part = new File(to.getParentFile(), APK + ".part");
                 InputStream in = connection.getInputStream();
                 try {
@@ -411,9 +437,20 @@ final class Updater {
                 } finally {
                     in.close();
                 }
-                if (part.length() < MIN_APK) {
+                if (declared > 0L && part.length() != declared) {
+                    // A body that ends early can still start with PK and be far over ten kilobytes,
+                    // and then the installer is the thing that fails. The promised length is the
+                    // only way to catch that before the user does.
+                    long got = part.length();
                     part.delete();
-                    throw new IllegalStateException("安装包不完整：" + part.length() + " 字节");
+                    throw new IllegalStateException("只收到 " + got + " / " + declared + " 字节");
+                }
+                if (part.length() < MIN_APK) {
+                    // Read the size before deleting: the old order always logged zero bytes, which
+                    // is the one number that would have said what went wrong.
+                    long got = part.length();
+                    part.delete();
+                    throw new IllegalStateException("安装包不完整：" + got + " 字节");
                 }
                 if (!isPackage(part)) {
                     part.delete();
@@ -431,6 +468,19 @@ final class Updater {
             }
         }
         throw new IllegalStateException("跳转次数太多");
+    }
+
+    /** The byte count the server promised, or -1 when it did not say. */
+    private static long declaredLength(HttpURLConnection connection) {
+        try {
+            String value = connection.getHeaderField("Content-Length");
+            if (value == null || value.length() == 0) {
+                return -1L;
+            }
+            return Long.parseLong(value.trim());
+        } catch (Throwable ignored) {
+            return -1L;
+        }
     }
 
     /** An APK is a zip: the first two bytes have to be {@code PK}, whatever the headers claim. */

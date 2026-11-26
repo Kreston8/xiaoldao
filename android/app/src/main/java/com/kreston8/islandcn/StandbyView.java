@@ -1248,10 +1248,16 @@ final class StandbyView extends FrameLayout {
     /**
      * True when the launcher is the app in front.
      *
-     * <p>Usage events only say what happened, so an empty window must not be read as "another app is
-     * in front": that is what used to hide the pill a few seconds after it appeared. The last answer
-     * is kept and only a newer event can change it; before anything is known the answer is true,
-     * because an overlay pill over the launcher is the normal state.
+     * <p>Only a positive "the launcher just resumed" counts as yes, and that answer is kept until
+     * something contradicts it. It used to be thrown away after two minutes, which is exactly the
+     * case that broke: stay in a chat for two minutes and the next poll has no fresh event, so
+     * "unknown" was read as "the desktop is probably in front" and the pill appeared on top of the
+     * chat. A mini program could not correct that either, because it never resumes an activity of
+     * its own, so nothing new was ever written.
+     *
+     * <p>So the answer is forgotten only when there is a reason to look again: the screen just came
+     * back on, or this app's own screen closed. Before anything is known the answer is true, because
+     * an overlay pill over the launcher is the normal state and a first run has to show something.
      *
      * <p>Without {@code PACKAGE_USAGE_STATS} the answer stays at that default, which the service
      * turns into "no pill at all" before asking here.
@@ -1268,6 +1274,17 @@ final class StandbyView extends FrameLayout {
                 return homeState == null || homeState;
             }
             long now = System.currentTimeMillis();
+            boolean screenOn = interactive(context);
+            if (screenOn != lastInteractive) {
+                lastInteractive = screenOn;
+                if (screenOn) {
+                    // Unlocking is the one moment the front app really can have changed, and its
+                    // event is written a moment later: re-read the whole window instead of
+                    // trusting the session that ended before the screen went off.
+                    homeState = null;
+                    homeCheckedAt = 0L;
+                }
+            }
             long since = homeCheckedAt > 0L ? Math.max(homeCheckedAt - 2000L, now - 60000L)
                     : now - 60000L;
             homeCheckedAt = now;
@@ -1279,33 +1296,66 @@ final class StandbyView extends FrameLayout {
                         continue;
                     }
                     String pkg = event.getPackageName();
-                    if (pkg == null || pkg.equals(context.getPackageName())) {
+                    if (pkg == null) {
                         continue;
                     }
-                    homeState = homes.contains(pkg);
+                    boolean self = pkg.equals(context.getPackageName());
+                    if (selfForeground && !self) {
+                        // Something else came to the front after this app's screen said it was
+                        // there, so that flag is stale - the screen was killed by the system while
+                        // it was up, and onStop never ran. The event is the better witness, and
+                        // without this the pill would stay hidden for good after one such kill.
+                        selfForeground = false;
+                    }
+                    // This app's own screen in front is never the desktop. Saying so here keeps the
+                    // answer honest even before the lifecycle hook below has run.
+                    homeState = !self && homes.contains(pkg);
                     homeStateAt = now;
                 }
             }
-            if (homeState != null && !homeState && now - homeStateAt > STALE_MS) {
-                // "Another app is in front" that nothing has refreshed for two minutes is not a fact
-                // any more: vendor ROMs drop usage events whenever they like, and a pill that stays
-                // hidden for the rest of the day is worse than one that shows up over the wrong
-                // screen. Forgetting the answer sends the next poll back to the safe default.
-                homeState = null;
+            if (selfForeground) {
+                return false;
             }
             return homeState == null || homeState;
         } catch (Throwable ignored) {
-            return homeState == null || homeState;
+            return !selfForeground && (homeState == null || homeState);
         }
     }
+
+    /**
+     * Tells the launcher check that this app's own screen is in front, or that it just left.
+     *
+     * <p>The lifecycle is exact where usage events are not, and it closes the hole that was visible
+     * on the phone: the pill kept showing over 小灵岛 itself. Leaving re-opens the question instead
+     * of guessing at an answer, so the next poll reads the window and decides.
+     */
+    static void noteForeground(boolean inFront) {
+        selfForeground = inFront;
+        homeCheckedAt = 0L;
+        homeStateAt = System.currentTimeMillis();
+        homeState = inFront ? Boolean.FALSE : null;
+    }
+
+    /** True while 小灵岛 itself is on screen, which is never the desktop. */
+    private static boolean selfForeground;
 
     /** Last answer about the launcher, kept across polls so a quiet window changes nothing. */
     private static Boolean homeState;
     private static long homeCheckedAt;
     private static long homeStateAt;
 
-    /** How long a "not the launcher" answer is trusted before it is thrown away. */
-    private static final long STALE_MS = 120_000L;
+    /** Last screen-on state seen; a screen that just came back deserves a fresh look. */
+    private static boolean lastInteractive = true;
+
+    private static boolean interactive(Context context) {
+        try {
+            android.os.PowerManager power =
+                    (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            return power == null || power.isInteractive();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
 
     private static Set<String> homePackages(Context context) {
         Set<String> homes = new HashSet<>();

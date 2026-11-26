@@ -452,6 +452,9 @@ public final class MainActivity extends Activity {
         // after a theme switch this screen is new while the pill may still be up.
         previewing = IslandService.isPreviewing();
         applyPreviewButton();
+        // The pill is a desktop thing, and this screen is not the desktop: say so exactly, instead
+        // of waiting for a usage event that may arrive late or not at all.
+        StandbyView.noteForeground(true);
     }
 
     /**
@@ -468,6 +471,8 @@ public final class MainActivity extends Activity {
         if (previewing && !isChangingConfigurations()) {
             stopPreview();
         }
+        // Whatever is in front now, it is not this screen: hand the question back to the poll.
+        StandbyView.noteForeground(false);
     }
 
     @Override

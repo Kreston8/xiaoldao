@@ -931,6 +931,15 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             notifyCard = previewCard;
             notifyShowing = true;
             target = previewCard;
+        } else if (urgent(notifyCard)) {
+            // A call or an alarm is the only thing allowed to take the top of the screen while
+            // another app is in front: it is happening now, and the clock is already ringing.
+            target = notifyCard;
+        } else if (!onDesktop()) {
+            // The pill belongs to the desktop. A card that arrived there is kept rather than shown,
+            // so it is back the moment the desktop is, and nothing follows the user into the next
+            // app: hiding here instead of at arrival is what stops a lyric line or an old
+            // notification from riding along for minutes after the launcher was left.
         } else if (musicCard != null) {
             target = notifyHoldUntil > SystemClock.elapsedRealtime() && notifyCard != null
                     ? notifyCard
@@ -950,6 +959,23 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             show(target);
         }
         applyStandbyVisibility();
+    }
+
+    /**
+     * True when the launcher is in front, which is the only screen the pill is allowed on.
+     *
+     * <p>Without usage access nothing can be known about the front app, and the arrival gate drops
+     * every card in that state anyway; the answer here is false so a track cannot slip through the
+     * one door that is not a notification.
+     */
+    private boolean onDesktop() {
+        return Perms.hasUsageAccess(this) && StandbyView.homeInFront(this);
+    }
+
+    /** Call and alarm cards are the two that may interrupt another app; nothing else may. */
+    private boolean urgent(IslandEvent event) {
+        return event != null
+                && (event.kind == IslandEvent.KIND_CALL || event.kind == IslandEvent.KIND_ALARM);
     }
 
     /**
