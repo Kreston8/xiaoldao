@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_bg">#000000</color>
-    <color name="icon_bg">#FF5C7A</color>
+    <!-- Near-black rather than pure #000000: a launcher tile that is literally black loses its edge
+         against the MIUI wallpaper mask, while #05060A still reads as black. -->
+    <color name="icon_bg">#FF05060A</color>
 </resources>

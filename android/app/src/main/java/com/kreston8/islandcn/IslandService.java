@@ -97,8 +97,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     private boolean alarmRegistered;
     private MediaWatcher mediaWatcher;
 
-    private BtWatcher btWatcher;
-    private boolean btRegistered;
     private StandbyView standby;
 
     private static final long STANDBY_POLL_MS = 4000L;
@@ -208,6 +206,7 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             Prefs.setRunning(this, false);
             KeepAlive.stop(this);
+            RestoreJob.cancel(this);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -216,6 +215,7 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         // Remembered for the reboot path and for the watchdog: only a deliberate stop clears it.
         Prefs.setRunning(this, true);
         KeepAlive.start(this);
+        RestoreJob.schedule(this);
         if (!Perms.canOverlay(this)) {
             Toast.makeText(this, R.string.need_overlay, Toast.LENGTH_LONG).show();
             // No overlay permission means no island, so a watchdog restart would loop forever.
@@ -246,7 +246,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         if (dropFor(event)) {
             return;
         }
-        event.bt(chipsFor(event.kind));
         if (island == null) {
             attachOverlay();
         }
@@ -421,8 +420,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             // Nothing scheduled, or the clock service is unavailable.
         }
 
-        // The receiver is passive, so it stays registered even while the chips are switched off.
-        startBt();
         // The music watcher is the only part that polls, so it is skipped entirely when off.
         if (!Prefs.enabled(this, IslandEvent.KIND_MUSIC)) {
             return;
@@ -451,12 +448,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             alarmRegistered = false;
         }
         alarmWatcher = null;
-
-        if (btRegistered && btWatcher != null) {
-            btWatcher.stop(this);
-            btRegistered = false;
-        }
-        btWatcher = null;
 
         if (mediaWatcher != null) {
             mediaWatcher.stop();
@@ -533,51 +524,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     }
 
     /**
-     * Battery chips for the card about to be drawn.
-     *
-     * <p>The switch normally gates them, but a lyric line always carries them: seeing the headset
-     * level without hunting for a setting is the point of the feature.
-     */
-    private java.util.List<IslandEvent.Bt> chipsFor(int kind) {
-        if (kind != IslandEvent.KIND_MUSIC && !Prefs.get(this, Prefs.KEY_BT)) {
-            return null;
-        }
-        if (btWatcher == null) {
-            startBt();
-        }
-        if (btWatcher == null) {
-            return null;
-        }
-        try {
-            return btWatcher.chips(this);
-        } catch (Throwable failure) {
-            return null;
-        }
-    }
-
-    /**
-     * Registers the battery receiver.
-     *
-     * <p>It only listens: the accessory pushes levels on its own, so this costs nothing while the
-     * chips stay hidden.
-     */
-    private void startBt() {
-        if (btRegistered) {
-            return;
-        }
-        if (btWatcher == null) {
-            btWatcher = new BtWatcher();
-            // A level read over GATT arrives later, possibly on another thread; redraw there.
-            btWatcher.levelListener(this::onBtLevels);
-        }
-        try {
-            btWatcher.start(this);
-            btRegistered = true;
-        } catch (Throwable ignored) {
-            // Without BLUETOOTH_CONNECT there is nothing to read, so no chips ever appear.
-        }
-    }
-    /**
      * The notification whitelist.
      *
      * <p>v2.10 dropped the old master switch, because the settings screen now lists exactly the
@@ -608,23 +554,6 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         }
         // Plain notifications, OTP and navigation are off by design: they are not on the list.
         return false;
-    }
-
-    /**
-     * A level the Bluetooth watcher just read, possibly from its own thread; the chips on the card
-     * are redrawn in place instead of waiting for the next notification.
-     */
-    private void onBtLevels() {
-        handler.post(() -> {
-            IslandEvent event = current;
-            if (event == null) {
-                return;
-            }
-            event.bt(chipsFor(event.kind));
-            if (island != null) {
-                island.setChips(event.bt);
-            }
-        });
     }
 
     /**

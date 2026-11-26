@@ -36,15 +36,12 @@ final class Prefs {
     /** Card keys the user closed by hand, newest last, one per line. */
     public static final String KEY_DISMISSED = "dismissed";
 
-    /** Bluetooth battery chips: on by default, and each accessory has its own switch below it. */
-    static final String KEY_BT = "on_bt";
     /** Desktop standby island and its three selectable items (items default to on). */
     static final String KEY_STANDBY = "on_standby";
     static final String KEY_STANDBY_WEATHER = "sb_weather";
     static final String KEY_STANDBY_PUPPY = "sb_puppy";
     static final String KEY_STANDBY_AQI = "sb_aqi";
     static final String KEY_STANDBY_QUOTE = "sb_quote";
-    static final String KEY_STANDBY_BT = "sb_bt";
     static final String KEY_STANDBY_ORDER = "sb_order";
     /** City name typed by the user; the only reason the weather request is ever made. */
     static final String KEY_CITY = "weather_city";
@@ -69,8 +66,6 @@ final class Prefs {
     static final String KEY_DELIVERY_SHANGOU = "dl_shangou";
     static final String KEY_DELIVERY_JD = "dl_jd";
     static final String KEY_DELIVERY_QIXIAN = "dl_qixian";
-    /** Prefix for the per-accessory switch; the device address is appended to it. */
-    static final String KEY_BT_DEVICE = "bt_ok:";
     /**
      * Whether the island was on the last time the process was alive.
      *
@@ -81,7 +76,7 @@ final class Prefs {
 
 
     /** The order a fresh install starts with, and the source of every known item. */
-    private static final String[] ORDER_DEFAULT = {"weather", "aqi", "puppy", "quote", "bt"};
+    private static final String[] ORDER_DEFAULT = {"weather", "aqi", "puppy", "quote"};
 
     private Prefs() {
     }

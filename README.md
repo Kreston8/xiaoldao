@@ -1,8 +1,8 @@
-# 岛仔 for Android
+# 小灵岛 for Android
 
 English | [中文说明](README.zh.md)
 
-岛仔 (Daozai) is a notification island for Android: one black pill at the top of the screen that
+小灵岛 (xiaoldao) is a notification island for Android: one black pill at the top of the screen that
 opens for the things you actually need to see, plus a smaller standby pill that stays on the home
 screen. Plain Java, two overlay windows, no WebView, no background polling beyond what the features
 need.
@@ -30,11 +30,11 @@ pill the same gestures work, and long-press copies what is on it.
 
 ## Install
 
-1. Open [Releases](../../releases) and download the newest `daozai-*.apk`.
+1. Open [Releases](../../releases) and download the newest `xiaoldao-*.apk`.
 2. Install it. MIUI will ask you to allow installs from this source.
 3. Open the app and grant, one line at a time: 悬浮窗权限, 通知使用权, and — if you want those
-   cards — 短信权限, 电话权限, 使用情况访问, 附近设备（蓝牙）.
-4. In MIUI: 应用管理 → 岛仔 → 权限 → 后台弹出界面 on; 省电策略 → 无限制; 自启动 on. Without these
+   cards — 短信权限, 电话权限, 使用情况访问.
+4. In MIUI: 应用管理 → 小灵岛 → 权限 → 后台弹出界面 on; 省电策略 → 无限制; 自启动 on. Without these
    three the island cannot be brought back after you leave the app.
 
 There is one universal APK. No ABI split, no native library.
@@ -44,11 +44,10 @@ There is one universal APK. No ABI split, no native library.
 - **To-do cards** can only read 小米笔记 (`com.miui.notes`). It publishes no provider, so the app
   reads its database directly and that needs root. Without root the switch does nothing, and the
   settings page says so.
-- **Bluetooth battery** has no public API on Android. The app asks the system for cached values,
-  listens for the battery broadcast, reads the GATT battery service, and asks the A2DP / HEADSET /
-  GATT profile proxies for connected devices. A classic-only headset has no GATT server to read,
-  and some buds report battery only over the vendor's own channel, so you may see an icon without a
-  number. The diagnostic line in the settings page says which source answered.
+- **Bluetooth battery was removed in 2.16.** Android has no public API for accessory battery —
+  `BATTERY_LEVEL_CHANGED` needs `BLUETOOTH_PRIVILEGED` — and classic-only earbuds answer over the
+  vendor's own protocol. Rather than ship a chip that may never show a number, the feature, its UI
+  and both Bluetooth permissions are gone.
 - **Weather** is typed by hand: no location permission is requested. The tap opens 小米天气 when it
   is installed; MIUI must allow 后台弹出界面 for that jump to survive.
 - **Calls**: Android 12 and newer gives no phone number to a third-party app. The card shows what

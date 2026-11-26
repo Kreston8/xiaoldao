@@ -74,7 +74,7 @@ final class StandbyView extends FrameLayout {
 
     private String signature = "";
     private boolean hasContent;
-    private DaozaiView face;
+    private XiaoldaoView face;
     /** The line of the day, kept as it stands so a double tap copies the quote alone. */
     private String copyText = "";
     /** When the last tap on the pill landed, for telling a double tap from a single one. */
@@ -359,27 +359,6 @@ final class StandbyView extends FrameLayout {
         boolean aqiOn = Prefs.get(context, Prefs.KEY_STANDBY_AQI);
         boolean faceOn = Prefs.get(context, Prefs.KEY_STANDBY_PUPPY);
         boolean quoteOn = Prefs.get(context, Prefs.KEY_STANDBY_QUOTE);
-        boolean btOn = Prefs.get(context, Prefs.KEY_STANDBY_BT);
-        // Read once per rebuild: peek() reflects into the platform for every accessory, and the pill
-        // is rebuilt every four seconds.
-        java.util.List<IslandEvent.Bt> devices = null;
-        if (btOn) {
-            try {
-                devices = BtWatcher.peek(context);
-            } catch (Throwable failure) {
-                devices = null;
-            }
-        }
-        String deviceSignature = "";
-        if (devices != null) {
-            StringBuilder builder = new StringBuilder();
-            for (IslandEvent.Bt device : devices) {
-                if (device != null) {
-                    builder.append(device.name).append('/').append(device.level).append(';');
-                }
-            }
-            deviceSignature = builder.toString();
-        }
 
         String temperature = null;
         String air = null;
@@ -395,7 +374,7 @@ final class StandbyView extends FrameLayout {
         }
         String quote = quoteOn ? quote(context) : "";
         String next = String.join("|", order) + "#" + temperature + "#" + code + "#" + air
-                + "#" + faceOn + "#" + quoteOn + "#" + quote + "#" + btOn + "#" + deviceSignature;
+                + "#" + faceOn + "#" + quoteOn + "#" + quote;
         if (next.equals(signature)) {
             return hasContent;
         }
@@ -429,7 +408,7 @@ final class StandbyView extends FrameLayout {
                     continue;
                 }
                 // 32 dp against a 50 dp pill: the eyes have to read as eyes at arm's length.
-                face = new DaozaiView(context);
+                face = new XiaoldaoView(context);
                 row.addView(face, fixed(dp(32), dp(32)));
                 face.animate(getVisibility() == View.VISIBLE && isShown());
                 count++;
@@ -450,13 +429,6 @@ final class StandbyView extends FrameLayout {
                 row.addView(line, margin());
                 // A double tap copies this exact line.
                 copyText = quote;
-                count++;
-            } else if ("bt".equals(item)) {
-                LinearLayout accessories = btChips(devices);
-                if (accessories == null) {
-                    continue;
-                }
-                row.addView(accessories, margin());
                 count++;
             }
         }
@@ -514,52 +486,6 @@ final class StandbyView extends FrameLayout {
         params.leftMargin = dp(4);
         box.addView(degrees, params);
         return box;
-    }
-
-    /**
-     * Accessory glyphs with their percentages, stacked vertically so both fit in the pill's height.
-     *
-     * <p>At most three, the same cap the card uses. A device that never reported a level shows "--"
-     * rather than an invented number.
-     */
-    private LinearLayout btChips(java.util.List<IslandEvent.Bt> devices) {
-        if (devices == null || devices.isEmpty()) {
-            return null;
-        }
-        LinearLayout box = new LinearLayout(getContext());
-        box.setOrientation(LinearLayout.HORIZONTAL);
-        box.setGravity(Gravity.CENTER_VERTICAL);
-        int shown = 0;
-        for (IslandEvent.Bt device : devices) {
-            if (device == null || shown >= 3) {
-                break;
-            }
-            LinearLayout one = new LinearLayout(getContext());
-            one.setOrientation(LinearLayout.VERTICAL);
-            one.setGravity(Gravity.CENTER_HORIZONTAL);
-
-            ImageView glyph = new ImageView(getContext());
-            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(15), dp(15));
-            iconParams.gravity = Gravity.CENTER_HORIZONTAL;
-            glyph.setImageResource(device.icon != 0 ? device.icon : R.drawable.ic_bt_generic);
-            glyph.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            one.addView(glyph, iconParams);
-
-            TextView percent = label(device.level >= 0 ? device.level + "%" : "--",
-                    0xFFC6C6CE, 9.5f, true);
-            percent.setGravity(Gravity.CENTER);
-            one.addView(percent);
-
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            if (shown > 0) {
-                params.leftMargin = dp(7);
-            }
-            box.addView(one, params);
-            shown++;
-        }
-        return shown == 0 ? null : box;
     }
 
     /** Stops the animation when the pill is hidden, so a hidden window costs nothing. */

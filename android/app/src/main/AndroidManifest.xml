@@ -31,19 +31,6 @@
          Open-Meteo endpoints once a city has been typed in. Nothing else connects. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Accessory names and the connected-device list. BLUETOOTH_CONNECT is a runtime grant on
-         Android 12+; the legacy permission covers the versions before it. BLUETOOTH_SCAN is only
-         used to find the BLE address of a pair of earbuds whose classic address refuses a GATT
-         connection, and it never leaves the phone. -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
-
     <!-- Android 11+ hides other apps unless they are declared here. Without this block
          getLaunchIntentForPackage("com.miui.weather2") answers null and the temperature tap ends up
          in a browser, which is exactly what it used to do on MIUI 14. -->
@@ -87,6 +74,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows notification content in an island overlay above other apps." />
         </service>
+        <!-- Watchdog that may legally start the foreground service from the background. -->
+        <service
+            android:name=".RestoreJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".IslandListener"

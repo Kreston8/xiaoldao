@@ -1,30 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 岛仔: one white capsule, two round eyes, one smile. The glyph is drawn from scratch so the
-     launcher icon belongs to this app and to nobody else: no borrowed shape, no borrowed palette. -->
+<!-- 小灵岛 xiaoldao: a neon capsule with two glowing eyes on a black tile.
+     Every shape here was drawn for this app: no borrowed glyph, no borrowed palette.
+     Adaptive icons are masked to 108 x 108 with a 72 dp safe zone, so all artwork stays inside
+     x/y 22..86 and survives every launcher mask (circle, squircle, teardrop). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- The capsule body, 48 x 42 with fully round ends. -->
+    <!-- Emissive halo: makes the capsule look lit instead of painted. -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M51,33 L57,33 A21,21 0 0 1 78,54 A21,21 0 0 1 57,75 L51,75 A21,21 0 0 1 30,54 A21,21 0 0 1 51,33 Z" />
+        android:pathData="M54,54 m-31,0 a31,31 0 1,0 62,0 a31,31 0 1,0 -62,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="31"
+                android:startColor="#6622D3EE"
+                android:centerColor="#2619B8FF"
+                android:endColor="#00000000" />
+        </aapt:attr>
+    </path>
 
-    <!-- Eyes, spaced far enough apart that they never merge at 48 dp. -->
+    <!-- The capsule: a 44 x 36 pill, stroked only, so the black tile shows through the middle. -->
     <path
-        android:fillColor="#FF17171E"
-        android:pathData="M46.4,49.6 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0" />
-    <path
-        android:fillColor="#FF17171E"
-        android:pathData="M61.6,49.6 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0" />
-
-    <!-- Mouth: a short relaxed smile, stroked so it stays light at small sizes. -->
-    <path
-        android:strokeColor="#FF17171E"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round"
+        android:pathData="M50,36 L58,36 A18,18 0 0 1 76,54 A18,18 0 0 1 58,72 L50,72 A18,18 0 0 1 32,54 A18,18 0 0 1 50,36 Z"
         android:fillColor="#00000000"
-        android:pathData="M48,59.5 Q54,64.5 60,59.5" />
+        android:strokeWidth="4"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="32"
+                android:startY="36"
+                android:endX="76"
+                android:endY="72"
+                android:startColor="#FF22D3EE"
+                android:endColor="#FFA855F7" />
+        </aapt:attr>
+    </path>
+
+    <!-- Two eyes, spaced 16 dp apart so they never merge at 48 dp. -->
+    <path
+        android:pathData="M46,54 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="46"
+                android:centerY="52.5"
+                android:gradientRadius="7"
+                android:startColor="#FFFFFFFF"
+                android:centerColor="#FFB9EEFF"
+                android:endColor="#FF3FC8F0" />
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M62,54 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="62"
+                android:centerY="52.5"
+                android:gradientRadius="7"
+                android:startColor="#FFFFFFFF"
+                android:centerColor="#FFB9EEFF"
+                android:endColor="#FF3FC8F0" />
+        </aapt:attr>
+    </path>
+
+    <!-- Two short HUD ticks reading as "signal" rather than decoration. -->
+    <path
+        android:pathData="M22,54 L28.5,54"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeColor="#FF22D3EE" />
+    <path
+        android:pathData="M79.5,54 L86,54"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFA855F7" />
 </vector>

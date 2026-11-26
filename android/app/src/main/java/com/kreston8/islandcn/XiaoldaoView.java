@@ -16,7 +16,7 @@ import android.view.View;
  * the slots and added a sideways gaze plus a small bounce after each blink, because at 24 dp the
  * eyes read as two dots that never moved.
  */
-final class DaozaiView extends View {
+final class XiaoldaoView extends View {
 
     /** 30 fps is enough for a blink and keeps a permanently visible window cheap. */
     private static final long FRAME_MS = 33L;
@@ -46,7 +46,7 @@ final class DaozaiView extends View {
         }
     };
 
-    DaozaiView(Context context) {
+    XiaoldaoView(Context context) {
         super(context);
         paint.setColor(EYE_COLOR);
         paint.setStyle(Paint.Style.FILL);

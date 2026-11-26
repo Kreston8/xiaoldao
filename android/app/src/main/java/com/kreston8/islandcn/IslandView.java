@@ -45,7 +45,7 @@ import android.widget.TextView;
  * that window means copy. Every other gesture fires on release.
  *
  * <p>The card body keeps three optional rows from earlier versions: a kind tag, a copyable code and
- * a countdown; the Bluetooth chips sit at the right end.
+ * a countdown.
  */
 public final class IslandView extends FrameLayout {
 
@@ -75,9 +75,6 @@ public final class IslandView extends FrameLayout {
     private static final long TICK_MS = 15000L;
     private static final long CYCLE_MS = 2600L;
     private static final long LYRIC_MS = 100L;
-    private static final int BT_MAX = 3;
-    /** Roughly one chip: the icon is 14 dp, the percentage under it a little wider. */
-    private static final int BT_CHIP_DP = 26;
     /** A second tap inside this window means copy; the single tap waits exactly this long. */
     private static final long DOUBLE_MS = 240L;
     /** How long a finger has to rest before the pill starts to shake. */
@@ -91,7 +88,7 @@ public final class IslandView extends FrameLayout {
     private final int minWidthPx;
     private final int maxWidthPx;
     private final int musicMinPx;
-    /** Current width before the Bluetooth chips, recomputed for every card. */
+    /** Base width of the content itself, recomputed for every card. */
     private int baseWidthPx;
     private final FrameLayout card;
     private final GradientDrawable cardBackground = new GradientDrawable();
@@ -104,7 +101,6 @@ public final class IslandView extends FrameLayout {
     private final LinearLayout copyRow;
     private final TextView codeView;
     private final TextView countdownView;
-    private final LinearLayout btRow;
 
     private final Handler ticker = new Handler(Looper.getMainLooper());
     private final Runnable tick = this::updateCountdown;
@@ -264,17 +260,6 @@ public final class IslandView extends FrameLayout {
         countdownParams.topMargin = dp(1);
         column.addView(countdownView, countdownParams);
 
-        btRow = new LinearLayout(context);
-        btRow.setOrientation(LinearLayout.HORIZONTAL);
-        btRow.setGravity(Gravity.CENTER_VERTICAL);
-        btRow.setVisibility(View.GONE);
-        LinearLayout.LayoutParams btParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btParams.leftMargin = dp(4);
-        // Right end of the pill; the close button that used to follow it is gone, because closing
-        // is now the left swipe.
-        expandedBox.addView(btRow, btParams);
-
         card.setOnTouchListener(this::touch);
         applySizes();
     }
@@ -345,7 +330,6 @@ public final class IslandView extends FrameLayout {
         // Grow to fit the line first; only a line that still does not fit scrolls.
         copyAll = joinAll(heading);
         fitWidth();
-        renderBt(event.bt);
         applySizes();
         applyScrolling(!karaoke);
         setContentDescription(event.appLabel);
@@ -383,12 +367,6 @@ public final class IslandView extends FrameLayout {
             out.append(colon ? "：" : " · ");
         }
         out.append(value);
-    }
-
-    /** Fresh Bluetooth levels for the chips already on screen, without touching the rest. */
-    void setChips(java.util.List<IslandEvent.Bt> devices) {
-        renderBt(devices);
-        applySizes();
     }
 
     /** Repaints the pill after the colour or the opacity changed in the settings screen. */
@@ -751,8 +729,8 @@ public final class IslandView extends FrameLayout {
     /**
      * Applies the one size the island has.
      *
-     * <p>Height never changes any more; the width is whatever {@link #fitWidth()} measured, plus the
-     * chips. The corner radius stays half the height, so the card is always a pill.
+     * <p>Height never changes any more; the width is whatever {@link #fitWidth()} measured. The
+     * corner radius stays half the height, so the card is always a pill.
      */
     private void applySizes() {
         ViewGroup.LayoutParams params = card.getLayoutParams();
@@ -762,38 +740,6 @@ public final class IslandView extends FrameLayout {
         cardBackground.setCornerRadius(dp(R_DP));
         expandedBox.setVisibility(View.VISIBLE);
         expandedBox.setAlpha(1f);
-    }
-
-    /**
-     * Draws one chip per connected Bluetooth device, up to {@link #BT_MAX}.
-     *
-     * <p>Android exposes no public battery API for accessories: the percentage is whatever the
-     * device last pushed through the system's own broadcast. A device that never reported one
-     * keeps its icon and shows {@code --} instead of inventing a number.
-     */
-    private void renderBt(java.util.List<IslandEvent.Bt> devices) {
-        btRow.removeAllViews();
-        int count = devices == null ? 0 : Math.min(devices.size(), BT_MAX);
-        if (count == 0) {
-            btRow.setVisibility(View.GONE);
-            cardWidthPx = baseWidthPx;
-            return;
-        }
-        for (int i = 0; i < count; i++) {
-            IslandEvent.Bt device = devices.get(i);
-            if (device == null) {
-                continue;
-            }
-            LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            if (i > 0) {
-                chipParams.leftMargin = dp(5);
-            }
-            btRow.addView(btChip(device), chipParams);
-        }
-        btRow.setVisibility(View.VISIBLE);
-        // The chips sit beside the text instead of eating it, so the pill grows by their width.
-        cardWidthPx = Math.min(maxWidthPx, baseWidthPx + dp(BT_CHIP_DP) * count);
     }
 
     /**
@@ -857,26 +803,6 @@ public final class IslandView extends FrameLayout {
                 view.setSelected(false);
             }
         }
-    }
-
-    private View btChip(IslandEvent.Bt device) {
-        LinearLayout chip = new LinearLayout(getContext());
-        chip.setOrientation(LinearLayout.VERTICAL);
-        chip.setGravity(Gravity.CENTER_HORIZONTAL);
-        ImageView icon = new ImageView(getContext());
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        icon.setImageResource(device.icon);
-        chip.addView(icon, new LinearLayout.LayoutParams(dp(14), dp(14)));
-        TextView percent = new TextView(getContext());
-        percent.setText(device.level < 0 ? "--" : device.level + "%");
-        percent.setTextColor(device.level > 0 && device.level <= 20 ? 0xFFF0B860 : 0xFFB9B9C2);
-        percent.setTextSize(10.5f);
-        percent.setIncludeFontPadding(false);
-        percent.setSingleLine(true);
-        chip.addView(percent, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        chip.setContentDescription(device.name + " " + percent.getText());
-        return chip;
     }
 
     private GradientDrawable rounded(int color, float radiusDp) {

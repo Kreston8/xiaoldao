@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">岛仔</string>
+    <string name="app_name">小灵岛</string>
 
-    <string name="setup_title">岛仔</string>
+    <string name="setup_title">小灵岛</string>
     <string name="setup_subtitle">原生悬浮窗实现：通知到达时在状态栏下方弹出胶囊，高度固定、宽度随内容自动伸缩。单击打开应用，双击复制取件码或每日一句，左滑关掉这条消息，上滑翻看轮换中的内容，长按后上滑让它消失三分钟。验证码、取件码可直接复制，外卖会显示还有几分钟。不加载网页，不需要联网。</string>
 
     <string name="perm_overlay_title">1. 悬浮窗权限</string>
@@ -18,17 +18,17 @@
     <string name="state_title">运行状态</string>
     <string name="service_on">运行中</string>
     <string name="service_off">未运行</string>
-    <string name="start">启动岛仔</string>
+    <string name="start">启动小灵岛</string>
     <string name="stop_island">停止</string>
     <string name="preview">预览效果</string>
-    <string name="preview_hint">先启动岛仔，再预览</string>
+    <string name="preview_hint">先启动小灵岛，再预览</string>
 
-    <string name="channel_status">岛仔运行状态</string>
+    <string name="channel_status">小灵岛运行状态</string>
     <string name="running_hint">新通知会出现在屏幕顶部。</string>
-    <string name="need_overlay">缺少悬浮窗权限，无法显示岛仔</string>
+    <string name="need_overlay">缺少悬浮窗权限，无法显示小灵岛</string>
 
     <string name="preview_title">预览通知</string>
-    <string name="preview_text">【岛仔】验证码 483920，5 分钟内有效，请勿泄露。</string>
+    <string name="preview_text">【小灵岛】验证码 483920，5 分钟内有效，请勿泄露。</string>
 
     <string name="sms_label">短信</string>
     <string name="tag_otp">验证码</string>
@@ -82,15 +82,11 @@
     <string name="perm_usage_title">5. 使用情况访问</string>
     <string name="perm_usage_desc">用来判断现在在不在桌面，从而让音乐卡片只在桌面显示、进任何 App 都收起。只有音乐在播放时才会每 2.5 秒查询一次，暂停、锁屏后完全停止。这项必须授权，「只在桌面显示」才生效；不授权时卡片会在所有界面上显示。</string>
 
-    <string name="miui_hint">MIUI / HyperOS 提示：除上面几项权限，还需要在「应用管理 → 岛仔 → 权限」里打开「后台弹出界面」，否则从后台弹不出胶囊。锁屏时系统会隐藏悬浮窗，这是系统限制。</string>
-    <string name="label_bt">蓝牙设备电量显示</string>
-    <string name="bt_hint">配对的手表、耳机、鼠标连上后显示在胶囊最右端：上面是设备图标（耳机／手表／鼠标），下面是百分比，和系统设置里那样。播放音乐时即使这个开关关着，电量也会出现在歌词条上。打开这一项后，下面会列出当前已连接的每一台设备，可以单独关掉某一台。读取顺序：先问系统要设备缓存的电量，再读设备主动上报的那次广播，最后自己用蓝牙 GATT 读一遍电量服务（每台设备 10 分钟最多一次，读完立刻断开）。有些耳机不提供电量服务，这种只能看到图标。最多同时显示 3 个设备。</string>
-    <string name="perm_bt_title">6. 附近设备（蓝牙）</string>
-    <string name="perm_bt_desc">用来列出已连接的蓝牙设备和它们的名称。不授权也能用，只是拿不到设备名，图标会退回通用样式。</string>
+    <string name="miui_hint">MIUI / HyperOS 提示：除上面几项权限，还需要在「应用管理 → 小灵岛 → 权限」里打开「后台弹出界面」，否则从后台弹不出胶囊。锁屏时系统会隐藏悬浮窗，这是系统限制。</string>
     <string name="label_standby">桌面常驻</string>
-    <string name="standby_hint">打开后，只要停在桌面，胶囊就一直在：按下面设定的顺序显示天气（带天气图标）、空气质量 AQI、岛仔表情、每日一句。岛仔只有两只眼睛——圆眼和弯眼微笑随机切换，偶尔眨一下。如果同时有通知卡片，两者每 3 秒轮换显示；播放音乐时由歌词条占位，这时来通知会先显示 3 秒再回到歌词。进任何 App 就收起，回到桌面再出现。</string>
+    <string name="standby_hint">打开后，只要停在桌面，胶囊就一直在：按下面设定的顺序显示天气（带天气图标）、空气质量 AQI、小灵岛表情、每日一句。小灵岛只有两只眼睛——圆眼和弯眼微笑随机切换，偶尔眨一下。如果同时有通知卡片，两者每 3 秒轮换显示；播放音乐时由歌词条占位，这时来通知会先显示 3 秒再回到歌词。进任何 App 就收起，回到桌面再出现。</string>
     <string name="label_standby_weather">天气温度</string>
-    <string name="label_standby_puppy">岛仔表情</string>
+    <string name="label_standby_puppy">小灵岛表情</string>
     <string name="label_standby_aqi">空气质量 AQI</string>
     <string name="label_standby_quote">每日一句</string>
     <string name="standby_order_title">显示顺序</string>
@@ -135,7 +131,6 @@
         <item>清楚自己要什么，剩下的都好办。</item>
         <item>今天是余生里最年轻的一天。</item>
     </string-array>
-    <string name="bt_unknown">蓝牙设备</string>
     <string name="label_standby_enable">开启桌面常驻</string>
     <string name="copied_all">已复制岛上的文字</string>
     <string name="notify_title">通知细分</string>
@@ -159,9 +154,11 @@
     <string name="label_delivery_shangou">闪购</string>
     <string name="label_delivery_jd">京东</string>
     <string name="label_delivery_qixian">七鲜</string>
-    <string name="bt_no_device">现在没有已连接的蓝牙设备。连上耳机或手表后再进来，这里会出现每台设备单独的开关。</string>
     <string name="weather_ok_place">已定位到 %1$s：%2$s°，AQI %3$s</string>
-    <string name="label_standby_bt">蓝牙设备电量</string>
-    <string name="hidden_temporarily">岛仔已隐藏，3 分钟后自动回来</string>
+    <string name="hidden_temporarily">小灵岛已隐藏，3 分钟后自动回来</string>
     <string name="weather_no_app">没有找到天气应用</string>
+    <string name="state_desc">开关记的是你的意愿：打开后前台服务常驻，通知来了才有岛可看；关掉就彻底退出，不会再自己冒出来。开机、更新之后会自动恢复，被系统清理时回到本页也会自动拉起来。</string>
+    <string name="service_dead">已停止 · 回到本页会自动恢复</string>
+    <string name="service_restoring">正在恢复…</string>
+    <string name="look_custom">自定义颜色</string>
 </resources>

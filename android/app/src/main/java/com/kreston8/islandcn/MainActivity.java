@@ -52,8 +52,6 @@ public final class MainActivity extends Activity {
     private TextView usageState;
     private TextView serviceState;
     private Button startStop;
-    private TextView btState;
-    private TextView btDiagView;
     private Button cityButton;
     private LinearLayout standbyRows;
     private TextView weatherState;
@@ -118,40 +116,25 @@ public final class MainActivity extends Activity {
         usageState = permState(usageCard, R.string.missing);
         addFill(root, usageCard, 10);
 
-        LinearLayout btCard = permCard(R.string.perm_bt_title, R.string.perm_bt_desc, R.string.bt_hint,
-                v -> requestBluetooth());
-        btState = permState(btCard, R.string.missing);
-        btDiagView = new TextView(this);
-        btDiagView.setTextSize(12f);
-        btDiagView.setTextColor(0xFF8A8A94);
-        btDiagView.setLineSpacing(dp(3), 1f);
-        addFill(btCard, btDiagView, 6);
-        addFill(root, btCard, 10);
-
         LinearLayout serviceCard = card();
+        TextView serviceDesc = text(R.string.state_desc, 13f, COLOR_SECONDARY, false);
+        serviceDesc.setLineSpacing(dp(3), 1f);
+        helpHeader(serviceCard, R.string.state_title, serviceDesc);
+        serviceState = text(R.string.service_off, 13f, COLOR_MISSING, true);
+        addFill(serviceCard, serviceState, 8);
         LinearLayout serviceRow = new LinearLayout(this);
         serviceRow.setOrientation(LinearLayout.HORIZONTAL);
-        serviceRow.setGravity(Gravity.CENTER_VERTICAL);
-        serviceRow.addView(text(R.string.state_title, 16f, COLOR_PRIMARY, true),
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT));
-        serviceState = text(R.string.service_off, 13f, COLOR_IDLE, true);
-        LinearLayout.LayoutParams stateParams = new LinearLayout.LayoutParams(
+        startStop = button(R.string.start, v -> toggleService());
+        startStop.setTextSize(13f);
+        Button previewButton = button(R.string.preview, v -> preview());
+        previewButton.setTextSize(13f);
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        stateParams.leftMargin = dp(10);
-        serviceRow.addView(serviceState, stateParams);
-        startStop = inlineButton(R.string.start, v -> toggleService());
-        serviceRow.addView(startStop, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        addFill(serviceCard, serviceRow, 0);
-        LinearLayout previewRow = new LinearLayout(this);
-        previewRow.setOrientation(LinearLayout.HORIZONTAL);
-        previewRow.setGravity(Gravity.CENTER_VERTICAL);
-        previewRow.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
-        previewRow.addView(smallButton(R.string.preview, v -> preview()),
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT));
-        addFill(serviceCard, previewRow, 10);
+        startParams.rightMargin = dp(8);
+        serviceRow.addView(startStop, startParams);
+        serviceRow.addView(previewButton, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        addFill(serviceCard, serviceRow, 12);
         addFill(root, serviceCard, 10);
 
         LinearLayout keepCard = card();
@@ -193,7 +176,6 @@ public final class MainActivity extends Activity {
         primaryRow(rows, R.string.label_alarm, Prefs.KEY_ALARM, true, null);
         primaryRow(rows, R.string.label_music, Prefs.KEY_MUSIC, true,
                 box -> subRow(box, getString(R.string.label_lyrics), Prefs.KEY_LYRICS));
-        primaryRow(rows, R.string.label_bt, Prefs.KEY_BT, true, this::bluetoothRows);
         addFill(featuresCard, text(R.string.music_hint, 12f, 0xFF8A8A94, false), 12);
         addFill(featuresCard, text(R.string.lyrics_hint, 12f, 0xFF8A8A94, false), 6);
         addFill(root, featuresCard, 10);
@@ -278,6 +260,26 @@ public final class MainActivity extends Activity {
         super.onResume();
         refreshState();
         syncPrimaries();
+        restoreIfWanted();
+    }
+
+    /**
+     * The switch is a setting, not a one-shot button. If the user last asked for the island to run
+     * and the process was killed while the app sat in the background, opening this screen starts it
+     * again instead of showing "off" and demanding a second tap.
+     */
+    private void restoreIfWanted() {
+        if (!Prefs.running(this) || IslandService.isRunning() || !Perms.canOverlay(this)) {
+            return;
+        }
+        try {
+            startForegroundService(new Intent(this, IslandService.class));
+            serviceState.setText(R.string.service_restoring);
+            serviceState.setTextColor(COLOR_MISSING);
+            startStop.postDelayed(this::refreshState, 900);
+        } catch (Throwable ignored) {
+            // The state line already says the island is not running; the user can tap 启动小灵岛.
+        }
     }
 
     private void refreshState() {
@@ -301,17 +303,20 @@ public final class MainActivity extends Activity {
         usageState.setText(usage ? R.string.granted : R.string.missing);
         usageState.setTextColor(usage ? COLOR_OK : COLOR_MISSING);
 
-        boolean bluetooth = canReadBluetooth();
-        btState.setText(bluetooth ? R.string.granted : R.string.missing);
-        btState.setTextColor(bluetooth ? COLOR_OK : COLOR_MISSING);
-        String btDiag = BtWatcher.probe(this);
-        if (btDiagView != null) {
-            btDiagView.setText("诊断：" + btDiag);
-        }
 
         boolean running = IslandService.isRunning();
-        serviceState.setText(running ? R.string.service_on : R.string.service_off);
-        serviceState.setTextColor(running ? COLOR_OK : COLOR_IDLE);
+        boolean wanted = Prefs.running(this);
+        if (running) {
+            serviceState.setText(R.string.service_on);
+            serviceState.setTextColor(COLOR_OK);
+        } else if (wanted) {
+            // The user asked for it and the process is gone: say so instead of pretending it is off.
+            serviceState.setText(R.string.service_dead);
+            serviceState.setTextColor(COLOR_MISSING);
+        } else {
+            serviceState.setText(R.string.service_off);
+            serviceState.setTextColor(COLOR_IDLE);
+        }
         startStop.setText(running ? R.string.stop_island : R.string.start);
         if (batteryState != null) {
             boolean ignoring = ignoresBatteryOptimizations();
@@ -323,6 +328,11 @@ public final class MainActivity extends Activity {
 
     private void toggleService() {
         if (IslandService.isRunning()) {
+            // A plain stopService also runs onDestroy, so the "wants to run" flag has to be cleared
+            // here; leaving it set is what made the island come back and the switch flip on its own.
+            Prefs.setRunning(this, false);
+            KeepAlive.stop(this);
+            RestoreJob.cancel(this);
             stopService(new Intent(this, IslandService.class));
             startStop.postDelayed(this::refreshState, 300);
             return;
@@ -332,6 +342,9 @@ public final class MainActivity extends Activity {
             Perms.openOverlaySettings(this);
             return;
         }
+        Prefs.setRunning(this, true);
+        KeepAlive.start(this);
+        RestoreJob.schedule(this);
         startForegroundService(new Intent(this, IslandService.class));
         startStop.postDelayed(this::refreshState, 700);
     }
@@ -436,14 +449,13 @@ public final class MainActivity extends Activity {
                 || Prefs.KEY_STANDBY_WEATHER.equals(key)
                 || Prefs.KEY_STANDBY_AQI.equals(key)
                 || Prefs.KEY_STANDBY_PUPPY.equals(key)
-                || Prefs.KEY_STANDBY_QUOTE.equals(key)
-                || Prefs.KEY_STANDBY_BT.equals(key);
+                || Prefs.KEY_STANDBY_QUOTE.equals(key);
     }
 
     /**
      * Switches read while the service runs, so flipping one needs no restart: the source filters are
-     * consulted on every notification, the platform filter on every delivery card, and the battery
-     * chips are rebuilt each time the pill is drawn.
+     * consulted on every notification and the platform filter on every delivery card.
+     */
      */
     private boolean isLiveKey(String key) {
         return isStandbyKey(key)
@@ -454,9 +466,7 @@ public final class MainActivity extends Activity {
                 || Prefs.KEY_DELIVERY_MEITUAN.equals(key)
                 || Prefs.KEY_DELIVERY_SHANGOU.equals(key)
                 || Prefs.KEY_DELIVERY_JD.equals(key)
-                || Prefs.KEY_DELIVERY_QIXIAN.equals(key)
-                || Prefs.KEY_BT.equals(key)
-                || key.startsWith(Prefs.KEY_BT_DEVICE);
+                || Prefs.KEY_DELIVERY_QIXIAN.equals(key);
     }
 
     /** A first-level switch plus the second-level rows it owns. */
@@ -549,30 +559,6 @@ public final class MainActivity extends Activity {
         subRow(parent, getString(R.string.label_delivery_qixian), Prefs.KEY_DELIVERY_QIXIAN);
     }
 
-    /**
-     * One switch per connected accessory. The list is read live rather than remembered, because
-     * pairings change while the screen is open and a cached list would offer devices in a drawer.
-     */
-    private void bluetoothRows(LinearLayout parent) {
-        java.util.List<String[]> devices;
-        try {
-            devices = BtWatcher.connected(this);
-        } catch (Throwable ignored) {
-            devices = new java.util.ArrayList<String[]>();
-        }
-        if (devices.isEmpty()) {
-            TextView none = text(R.string.bt_no_device, 12f, 0xFF8A8A94, false);
-            none.setLineSpacing(dp(3), 1f);
-            addFill(parent, none, 8);
-            return;
-        }
-        for (String[] device : devices) {
-            String address = device[0];
-            String name = device.length > 1 && device[1] != null && !device[1].isEmpty()
-                    ? device[1] : address;
-            subRow(parent, name, Prefs.KEY_BT_DEVICE + address);
-        }
-    }
 
     /** Re-reads every switch and rebuilds whatever second level is open (called on resume). */
     private void syncPrimaries() {
@@ -621,9 +607,6 @@ public final class MainActivity extends Activity {
         if ("aqi".equals(item)) {
             return Prefs.KEY_STANDBY_AQI;
         }
-        if ("bt".equals(item)) {
-            return Prefs.KEY_STANDBY_BT;
-        }
         return Prefs.KEY_STANDBY_QUOTE;
     }
 
@@ -650,9 +633,6 @@ public final class MainActivity extends Activity {
         }
         if ("aqi".equals(item)) {
             return R.string.label_standby_aqi;
-        }
-        if ("bt".equals(item)) {
-            return R.string.label_standby_bt;
         }
         return R.string.label_standby_quote;
     }
@@ -706,22 +686,6 @@ public final class MainActivity extends Activity {
         }, "weather-probe").start();
     }
 
-    private boolean canReadBluetooth() {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-                || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestBluetooth() {
-        if (canReadBluetooth()) {
-            toast(R.string.granted);
-            return;
-        }
-        requestPermissions(new String[]{
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN}, 4);
-    }
-
     /**
      * One round swatch per preset, the chosen one ringed in white.
      *
@@ -753,6 +717,22 @@ public final class MainActivity extends Activity {
             params.rightMargin = dp(10);
             swatches.addView(swatch, params);
         }
+        GradientDrawable custom = new GradientDrawable();
+        custom.setShape(GradientDrawable.OVAL);
+        custom.setColors(new int[]{0xFFFF3B30, 0xFFFFCC00, 0xFF34C759, 0xFF32ADE6, 0xFFAF52DE, 0xFFFF3B30});
+        custom.setGradientType(GradientDrawable.SWEEP_GRADIENT);
+        custom.setStroke(dp(1f), 0xFF3C3C46);
+        View picker = new View(this);
+        picker.setBackground(custom);
+        picker.setContentDescription(getString(R.string.look_custom));
+        picker.setOnClickListener(v -> ColorPicker.show(this, Look.color(this), color -> {
+            Look.setColor(MainActivity.this, color);
+            renderSwatches();
+            Look.ping(MainActivity.this);
+        }));
+        LinearLayout.LayoutParams customParams = new LinearLayout.LayoutParams(dp(34), dp(34));
+        customParams.rightMargin = dp(10);
+        swatches.addView(picker, customParams);
     }
 
     /** Stores the new opacity and repaints the two overlays straight away. */

@@ -1,4 +1,4 @@
-岛仔 (Daozai) — a notification island for Android
+小灵岛 (xiaoldao) — a notification island for Android
 Copyright (c) 2026 Kreston8
 
 Credits, and the things this project deliberately does not claim.
@@ -7,7 +7,7 @@ Credits, and the things this project deliberately does not claim.
    The idea of a pill that follows notifications, and the design vocabulary used here, come from
    islandcn — https://github.com/opencoredev/islandcn — MIT License, Copyright (c) 2026 Leo.
    That project is a Next.js site plus a shadcn registry. No source code, asset or text from it is
-   included in this repository; the Android implementation is original Java written for 岛仔. The
+   included in this repository; the Android implementation is original Java written for 小灵岛. The
    credit is here because the inspiration is real, not because a licence requires it.
 
 2. Trademarks

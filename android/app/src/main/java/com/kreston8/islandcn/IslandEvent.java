@@ -64,30 +64,6 @@ final class IslandEvent {
         return this;
     }
 
-    /** One connected Bluetooth device and the battery level it last reported. */
-    static final class Bt {
-        /** Device name, or a generic label when the name could not be read. */
-        final String name;
-        /** 0..100, or -1 when the device has never reported a level. */
-        final int level;
-        /** One of {@code ic_bt_watch}, {@code ic_bt_headset}, {@code ic_bt_generic}. */
-        final int icon;
-
-        Bt(String name, int level, int icon) {
-            this.name = name;
-            this.level = level;
-            this.icon = icon;
-        }
-    }
-
-    /** Battery chips for the right end of the pill; null or empty means none. */
-    java.util.List<Bt> bt;
-
-    IslandEvent bt(java.util.List<Bt> chips) {
-        this.bt = chips;
-        return this;
-    }
-
     private IslandEvent(
             String key,
             String pkg,
