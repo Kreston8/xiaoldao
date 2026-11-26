@@ -1,0 +1,17 @@
+# gradle
+/android/.gradle/
+/android/.kotlin/
+/android/build/
+/android/app/build/
+/android/local.properties
+.idea/
+*.iml
+
+# signing material never goes into a public repo
+*.p12
+*.jks
+*.keystore
+
+# local verification leftovers
+*.log
+dl*/
