@@ -70,6 +70,7 @@ public final class RestoreJob extends JobService {
         if (scheduler == null) {
             return;
         }
+        Diag.note(context, "排一次 10 秒 job");
         JobInfo job = new JobInfo.Builder(NOW_ID, new ComponentName(context, RestoreJob.class))
                 .setMinimumLatency(NOW_MS)
                 .setOverrideDeadline(NOW_MS + 5_000L)
@@ -79,6 +80,7 @@ public final class RestoreJob extends JobService {
             scheduler.schedule(job);
         } catch (RuntimeException ignored) {
             // Quota or a vendor block: the periodic job and the settings screen still cover it.
+            Diag.note(context, "10 秒 job 被拒");
         }
     }
 

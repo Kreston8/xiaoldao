@@ -1,0 +1,43 @@
+package com.kreston8.islandcn;
+
+/**
+ * The text behind the collapsed 「版本更新日志」 row in the settings screen.
+ *
+ * <p>Plain text on purpose: it is read on a phone, inside a card that expands in place, and it is
+ * maintained by hand next to the release notes. Newest release first, one line per change, and a
+ * line starting with 「修」 is a defect that used to be real.
+ */
+final class Changelog {
+
+    static final String TEXT =
+            "2.20 · 应用内更新\n"
+            + "· 设置页显示当前版本号（版本名 + 版本号）\n"
+            + "· 检查更新：发现新版本会直接下载，然后打开系统安装器\n"
+            + "· 自动更新开关：每小时检查一次，默认关闭\n"
+            + "· 新增这个「版本更新日志」折叠块\n"
+            + "· 修：任务被划掉后岛不回来。复活判断看的是「服务刚好活着」这个内存标志，"
+            + "而系统重新拉起进程只为投递「任务被划掉」时它一定是 false，于是 8 秒闹钟和 10 秒 job "
+            + "都没排队。现在改看设置里的开关，并且两种情况都写日志\n"
+            + "· 修：前台服务启动被系统拒绝时只会崩掉，现在会写一行「前台服务被拒」\n"
+            + "\n"
+            + "2.19 · 常驻岛两项\n"
+            + "· 常驻岛新增「农历 · 节气」（含节日倒数）与「屏幕时间 · 解锁」，默认关闭\n"
+            + "· 每一项都有宽度上限，一行放不下就不显示\n"
+            + "\n"
+            + "2.18 · 回归更快\n"
+            + "· 划掉任务后 8 秒一次性闹钟 + 10 秒 job 双保险\n"
+            + "· 失败按 30 秒 / 1 分 / 3 分 / 10 分阶梯重试\n"
+            + "· 设置页新增「保活诊断」，可复制最近 60 条事件\n"
+            + "· 「别的应用在前台」判断 2 分钟后过期，避免药丸整天不出现\n"
+            + "\n"
+            + "2.17 · 外观与天气\n"
+            + "· 新图标：竖着的两只眼睛\n"
+            + "· 天气写入磁盘，重启后先显示旧值再刷新\n"
+            + "\n"
+            + "2.16 · 精简\n"
+            + "· 删除蓝牙电量（系统没有公开接口，值不可靠）\n"
+            + "· 只保留两只眼睛，随机切换、会眨眼\n"
+            + "\n"
+            + "说明：本应用不联网也能用；联网只发生在歌词（music.163.com）、天气"
+            + "（open-meteo.com）和更新检查（api.github.com）三处，各自有开关。";
+}

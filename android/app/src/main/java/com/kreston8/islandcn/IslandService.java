@@ -193,12 +193,24 @@ public final class IslandService extends Service implements IslandBridge.Sink {
      */
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        Diag.note(this, "任务被划掉（running=" + running + "）");
-        if (running) {
+        // The saved switch, not the field. A process the system starts only to deliver this
+        // callback has never been through onStartCommand, so its `running` is false -- and gating
+        // on that is exactly what left the island away until the app was opened by hand.
+        boolean wanted = running || Prefs.running(this);
+        Diag.note(this, "任务被划掉（运行中 " + running + "，开关 " + Prefs.running(this) + "）");
+        if (wanted) {
             KeepAlive.start(this);
             KeepAlive.startNow(this);
             RestoreJob.scheduleNow(this);
-            startStandby();
+            if (running) {
+                startStandby();
+            } else {
+                // This instance has no windows yet, so the two timers alone are not enough: a real
+                // start command is what attaches the overlay and turns the field on.
+                KeepAlive.startService(this);
+            }
+        } else {
+            Diag.note(this, "任务被划掉：开关关着，不复活");
         }
         super.onTaskRemoved(rootIntent);
     }
@@ -225,7 +237,16 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             stopSelf();
             return START_NOT_STICKY;
         }
-        startInForeground();
+        try {
+            startInForeground();
+        } catch (Throwable error) {
+            // Android 12 refuses a foreground start from the background on some ROMs, and the
+            // exception would take the whole process down without leaving a readable line behind.
+            Diag.note(this, "前台服务被拒：" + error.getClass().getSimpleName());
+            RestoreJob.schedule(this);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         running = true;
         // Remembered for the reboot path and for the watchdog: only a deliberate stop clears it.
         Prefs.setRunning(this, true);
@@ -537,6 +558,9 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             Diag.note(this, "常驻岛" + (home ? "显示" : "隐藏") + "（开关 " + on + "，用量权限 " + usage
                     + "，桌面在前 " + front + "）");
         }
+        // The hourly update check rides on the four-second poll that already runs here: the
+        // foreground service keeps the process alive, which a broadcast receiver does not.
+        Updater.autoTick(this);
         applyPhase();
     }
 

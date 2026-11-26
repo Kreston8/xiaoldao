@@ -47,6 +47,8 @@ public final class MainActivity extends Activity {
     private static final int COLOR_HELP = 0xFF2A2A33;
     /** Fold key for the always-on card, which has a literal title rather than a string id. */
     private static final int FOLD_ALWAYS_ON = 1;
+    /** Fold key for the changelog; small numbers stay clear of string resource ids. */
+    private static final int FOLD_CHANGELOG = 2;
 
     private TextView overlayState;
     private TextView accessState;
@@ -64,6 +66,10 @@ public final class MainActivity extends Activity {
     private SeekBar alphaBar;
     private TextView alphaValue;
     private TextView batteryState;
+    /** The line under the version number: checking, up to date, downloading, or ready. */
+    private TextView updateState;
+    /** Disabled until a package is actually on disk, so it never looks broken when tapped. */
+    private Button installButton;
     /** Fold keys of the small print the user has unfolded, kept for the life of the process. */
     private final java.util.Set<Integer> unfolded = new java.util.HashSet<Integer>();
     /** Every first-level switch, so resume can re-read them and rebuild the open second level. */
@@ -140,6 +146,58 @@ public final class MainActivity extends Activity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         addFill(serviceCard, serviceRow, 12);
         addFill(root, serviceCard, 10);
+
+        // Version, update buttons, and the changelog fold. The fold starts closed, which is the
+        // whole point of it: the page should not open on a wall of release notes.
+        LinearLayout updateCard = card();
+        LinearLayout versionRow = new LinearLayout(this);
+        versionRow.setOrientation(LinearLayout.HORIZONTAL);
+        versionRow.setGravity(Gravity.CENTER_VERTICAL);
+        versionRow.addView(text("当前版本", 16f, COLOR_PRIMARY, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        versionRow.addView(text(Updater.label(this), 14f, COLOR_SECONDARY, false),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+        addFill(updateCard, versionRow, 0);
+        updateState = text("还没有检查过更新", 13f, COLOR_SECONDARY, false);
+        updateState.setLineSpacing(dp(3), 1f);
+        addFill(updateCard, updateState, 8);
+        LinearLayout updateRow = new LinearLayout(this);
+        updateRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button checkButton = button("检查更新", v -> checkUpdate());
+        checkButton.setTextSize(13f);
+        installButton = button("安装已下载", v -> Updater.install(this));
+        installButton.setTextSize(13f);
+        LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        checkParams.rightMargin = dp(8);
+        updateRow.addView(checkButton, checkParams);
+        updateRow.addView(installButton, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        addFill(updateCard, updateRow, 12);
+        LinearLayout autoRow = new LinearLayout(this);
+        autoRow.setOrientation(LinearLayout.HORIZONTAL);
+        autoRow.setGravity(Gravity.CENTER_VERTICAL);
+        autoRow.addView(text("自动更新", 14f, COLOR_PRIMARY, false),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Switch autoToggle = new Switch(this);
+        autoToggle.setChecked(Prefs.opt(this, Prefs.KEY_AUTO_UPDATE));
+        autoToggle.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.set(this, Prefs.KEY_AUTO_UPDATE, checked);
+            refreshUpdateState();
+        });
+        autoRow.addView(autoToggle, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        addFill(updateCard, autoRow, 12);
+        addFill(updateCard, text("打开后每小时检查一次，发现新版本会自动下载并打开系统安装器。"
+                + "系统不允许静默安装，最后一步要在系统弹窗里点一次「安装」；"
+                + "第一次还需要允许本应用「安装未知应用」，这一步由系统设置页负责。"
+                + "下载走 api.github.com 和 objects.githubusercontent.com 两个地址，"
+                + "关掉这个开关就完全不联网检查。", 12f, 0xFF8A8A94, false), 6);
+        TextView changelog = text(Changelog.TEXT, 12f, 0xFFB8B8C2, false);
+        changelog.setLineSpacing(dp(4), 1f);
+        addFill(updateCard, foldRow("版本更新日志", FOLD_CHANGELOG, changelog), 12);
+        addFill(root, updateCard, 10);
 
         LinearLayout keepCard = card();
         TextView keepDesc = text("MIUI 上要让岛一直活着，需要四步：①「自启动」里允许本 App；"
@@ -298,6 +356,7 @@ public final class MainActivity extends Activity {
         refreshDiag();
         syncPrimaries();
         restoreIfWanted();
+        showReadyPackage();
     }
 
     /** Re-reads the diagnostic log; the screen is reused, so this runs on every resume. */
@@ -465,6 +524,66 @@ public final class MainActivity extends Activity {
             // The battery receiver registers with the service, so the new grant needs a restart.
             restartService();
         }
+    }
+
+    /** Reads the release list once, downloads the package, and hands it to the system installer. */
+    private void checkUpdate() {
+        Updater.check(this, (message, ok) -> {
+            if (updateState == null) {
+                return;
+            }
+            updateState.setText(message);
+            updateState.setTextColor(ok ? COLOR_OK : COLOR_SECONDARY);
+            refreshUpdateState();
+        }, false);
+    }
+
+    /** Keeps the 安装已下载 button honest: greyed out while there is nothing to install. */
+    private void refreshUpdateState() {
+        if (installButton == null) {
+            return;
+        }
+        boolean ready = Updater.ready(this).length() > 0;
+        installButton.setEnabled(ready);
+        installButton.setAlpha(ready ? 1f : 0.45f);
+    }
+
+    /** Says so on resume when a package was downloaded while the app was in the background. */
+    private void showReadyPackage() {
+        refreshUpdateState();
+        String ready = Updater.ready(this);
+        if (ready.length() > 0 && updateState != null) {
+            updateState.setText("已下载 " + ready + "，点「安装已下载」交给系统安装器");
+            updateState.setTextColor(COLOR_OK);
+        }
+    }
+
+    /**
+     * A fold whose title line is itself the button, and which starts closed.
+     *
+     * <p>Different from {@link #helpHeader}: no round "?", because this is a heading people are
+     * meant to tap, not small print hidden behind a question mark.
+     */
+    private LinearLayout foldRow(CharSequence title, final int key, View body) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(text(title, 14f, COLOR_PRIMARY, false), new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        final TextView mark = text(unfolded.contains(key) ? "收起" : "展开", 12f,
+                COLOR_SECONDARY, false);
+        row.addView(mark, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        final LinearLayout inner = foldBox(key, body);
+        row.setOnClickListener(v -> {
+            toggleFold(key, inner);
+            mark.setText(unfolded.contains(key) ? "收起" : "展开");
+        });
+        addFill(box, row, 0);
+        addFill(box, inner, 6);
+        return box;
     }
 
     /** One settings row: label on the left, toggle on the right. */

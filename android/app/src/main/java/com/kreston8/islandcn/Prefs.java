@@ -95,6 +95,15 @@ final class Prefs {
     static final String KEY_RUNNING = "running";
 
 
+    /** The 「自动更新」 switch: off unless asked for, since it downloads over the network. */
+    static final String KEY_AUTO_UPDATE = "auto_update";
+
+    /** When the last finished check happened, in wall clock milliseconds; the hourly gate reads it. */
+    static final String KEY_UPDATE_AT = "update_at";
+
+    /** Tag already downloaded into the cache directory, e.g. {@code xiaoldao-v2.21.8}. */
+    static final String KEY_UPDATE_TAG = "update_tag";
+
     /** The order a fresh install starts with, and the source of every known item. */
     private static final String[] ORDER_DEFAULT = {
             "weather", "aqi", "puppy", "quote", "lunar", "usage"};

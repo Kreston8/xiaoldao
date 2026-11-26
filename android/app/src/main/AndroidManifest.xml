@@ -26,10 +26,17 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- Two sockets in total, both HTTPS and both behind their own switch: the lyric lookup
-         against music.163.com while a track plays, and the temperature lookup against the
-         Open-Meteo endpoints once a city has been typed in. Nothing else connects. -->
+    <!-- Three sockets in total, all HTTPS and each behind its own switch: the lyric lookup
+         against music.163.com while a track plays, the temperature lookup against the Open-Meteo
+         endpoints once a city has been typed in, and the release list of Kreston8/xiaoldao on
+         api.github.com when 「自动更新」 is on or 「检查更新」 is tapped. The package itself then
+         comes from objects.githubusercontent.com. Nothing else connects, and with every switch off
+         the app makes no request at all. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The downloaded update is installed by the system installer, which refuses to run for an
+         app without this permission. The person still has to tap 「安装」: nothing here installs
+         silently, because a silent install would need root or device-owner rights. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android 11+ hides other apps unless they are declared here. Without this block
          getLaunchIntentForPackage("com.miui.weather2") answers null and the temperature tap ends up
@@ -79,6 +86,14 @@
             android:name=".RestoreJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Hands the downloaded package to the system installer and nothing else: the only file
+             it serves is the update APK in the cache directory, and the only way in is the
+             one-shot read grant carried by the install intent. -->
+        <provider
+            android:name=".UpdateProvider"
+            android:authorities="com.kreston8.islandcn.update"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".IslandListener"

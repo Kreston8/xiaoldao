@@ -242,7 +242,7 @@ The app is a two-level list. Nine first-level switches, top to bottom:
 | 来电显示 | on | — |
 | 闹钟 | on | — |
 | 音乐播放与歌词 | on | 联网歌词 — the one lyric lookup per track |
-| 蓝牙设备电量显示 | on | one switch per connected accessory, listed live |
+| 自动更新 | off | one check per hour against `api.github.com`, then the package is handed to the system installer |
 
 A second level only exists while its parent is on: closing the parent folds the sub-list away and
 throws its rows out, so nothing stays rendered behind a closed switch. Everything that is not in
@@ -269,9 +269,8 @@ courier is kept rather than dropped. Outside that card:
 5. **Usage access** (`PACKAGE_USAGE_STATS`), optional but required for the desktop-only rule and for
    the standby pill: it is how the app knows the launcher is in front. One cheap query every 2.5 s
    while a track plays, and one every 4 s while the standby pill is active.
-6. **Nearby devices** (`BLUETOOTH_CONNECT`, plus `BLUETOOTH_SCAN` with `neverForLocation` on Android
-   12+), optional, for the names, the connected-device list and the short BLE twin scan behind the
-   battery chips.
+6. **Nearby devices** (`BLUETOOTH_CONNECT` and `BLUETOOTH_SCAN`) was needed up to 2.16 for the
+   accessory percentages; 2.16 removed the feature and the two permissions with it.
 7. On MIUI / HyperOS also enable **后台弹出界面** for this app, otherwise the system drops overlays
    started from the background.
 8. Android 13+ asks for `POST_NOTIFICATIONS` so the foreground service can show its status
@@ -293,6 +292,10 @@ courier is kept rather than dropped. Outside that card:
    rest of the day when a ROM stops delivering usage events. `RECEIVE_BOOT_COMPLETED` (no prompt)
    restores the island after a reboot, and only if it was on. A 强行停止 still cancels everything:
    nothing an app schedules survives that, which is the system's design and not a bug.
+10. **Install unknown apps** (`REQUEST_INSTALL_PACKAGES`), only for updates: the package
+    downloaded by 检查更新 goes to the system installer, and Android refuses to run that installer
+    for an app without this grant. The person still confirms the install; nothing here installs by
+    itself.
 
 ## What it is not
 
@@ -325,8 +328,19 @@ courier is kept rather than dropped. Outside that card:
   screen and the standby pill never appears.
 - 天气温度 and 空气质量 AQI need a city typed by hand and hit two hosts on Open-Meteo: `api.open-meteo.com`
   for the forecast and `air-quality-api.open-meteo.com` for the AQI, with
-  `geocoding-api.open-meteo.com` turning the name into coordinates. The accessory percentage needs the
-  device to report and `BLUETOOTH_CONNECT`. None of that is a promise the system makes.
+  `geocoding-api.open-meteo.com` turning the name into coordinates.
+- 自动更新 is off until asked for, and there is a 检查更新 button that does the same thing once. When
+  either runs, the app reads the release list of `Kreston8/xiaoldao` from
+  `api.github.com/repos/Kreston8/xiaoldao/releases?per_page=50`, compares the newest `xiaoldao-v…`
+  tag with the installed `versionName`, and — only when the tag is newer — downloads that release's
+  `.apk` from `objects.githubusercontent.com` into the app's own cache directory, then hands it to
+  the system installer through a content provider that serves exactly that one file. Three
+  consequences worth saying out loud: the check only happens while the island service is alive, a
+  failed check writes its reason under 保活诊断 instead of failing silently, and there is no silent
+  install — without root or device-owner rights the last tap is the person's, and the first update
+  also needs 设置 → 安装未知应用 granted to this app.
+- `BLUETOOTH_CONNECT` and the accessory percentage are gone with 2.16: the public API never
+  reported a reliable number, so the feature was removed rather than guessed at.
 
 ## Build
 
