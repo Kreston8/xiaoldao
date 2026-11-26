@@ -1,0 +1,127 @@
+name: Build Android APK
+
+# One universal APK, built and signed on every push that touches android/**, then published as a release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or update (leave empty for daozai-v2.15.<run number>)"
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-apk.yml"
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Ensure SDK platform
+        run: |
+          SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMAN" ]; then
+            "$SDKMAN" --install "platforms;android-34" "build-tools;34.0.0" || true
+          fi
+          ls "$ANDROID_HOME/platforms"
+
+      - name: Restore the pinned signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/daozai.p12"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/daozai.p12" >> "$GITHUB_ENV"
+            echo "Pinned key restored: the APK installs over previous versions."
+          else
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret, falling back to the debug key. This APK needs a clean install."
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # versionCode = 1000 + run number, so a build from this repo always updates an islandcn build.
+          VERSION_CODE=$((1000 + ${{ github.run_number }}))
+          gradle assembleRelease --no-daemon --stacktrace \
+            -PversionCode="$VERSION_CODE" \
+            -PversionName="2.15.${{ github.run_number }}"
+
+      # Advisory only: the artifact is verified locally afterwards, this just says which key signed it.
+      - name: Check the signing certificate
+        continue-on-error: true
+        run: |
+          APK="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release.apk"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee cert.txt || true
+          if grep -q "CN=Android Debug" cert.txt 2>/dev/null; then
+            echo "::warning::APK is debug-signed; it cannot update an earlier pinned-key build."
+          fi
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+          "dist/daozai-2.15.${{ github.run_number }}.apk"
+          ls -l dist
+          unzip -l dist/*.apk | head -30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daozai-apk
+          path: dist/*.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="daozai-v2.15.${{ github.run_number }}"; fi
+          cat > notes.md <<'NOTES'
+          ## English
+
+          **What this build is**
+          岛仔 (Daozai) is a notification island for Android: a black pill at the top of the screen that opens for messages, verification codes, pickup codes, deliveries, calls, alarms and the 网易云音乐 player with line-by-line lyrics, plus a small standby pill on the home screen with the clock, the temperature, the battery and the connected Bluetooth devices. Plain Java, two overlay windows, no WebView.
+
+          **What is new in this build**
+          - **The app now has its own repository.** Same code, same package name, same signing key as 2.14.x, so it installs straight over the version you already have and every setting survives. Version numbers restart at 2.15, and `versionCode` is 1000 + the run number, which keeps it above the 2.14 builds.
+          - Everything else in this build is 2.14: the rename to 岛仔 with its own icon, one-line permission rows, the temperature tap that reaches 小米天气, and the connected-device list read through public profile proxies.
+
+          **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS; MIUI also needs 后台弹出界面, and for 岛仔 to stay up after you leave the app it needs 自启动 with an unrestricted 省电策略. Limits worth knowing: Android 12 and newer forbids starting a foreground service from the background, so the 15-minute watchdog can only bring the island back when the app is exempt from battery optimisation; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; a classic-only headset has no GATT server to read, and some buds only report battery over the vendor's own channel, so a chip may show an icon without a number — send me the diagnostic line and I can tell you which case you are in; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Four hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/daozai/blob/main/android/README.md) · [中文](https://github.com/Kreston8/daozai/blob/main/android/README.zh.md)
+
+          ## 中文
+
+          **这个包是什么**
+          岛仔是一个 Android 通知岛：屏幕顶部一颗黑色胶囊，为消息、验证码、取件码、快递、来电、闹钟和网易云音乐（带逐行歌词）弹开；桌面上还有一个更小的常驻药丸，显示时钟、气温、电量和已连接的蓝牙设备。纯 Java，两个 overlay 窗口，没有 WebView。
+
+          **本次更新**
+          - **应用有了自己的仓库。** 代码、包名、签名证书都和 2.14 一样，所以可以直接覆盖已安装的版本，设置全部保留。版本号从 2.15 重新起算，`versionCode` 是 1000 + run 号，永远高于 2.14 系列。
+          - 其余内容就是 2.14：改名为「岛仔」并换上自己的图标、权限行压成一行、点温度能打开小米天气、已连接设备列表改走公开的 profile 代理。
+
+          **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS；MIUI 还需开启「后台弹出界面」，而想让岛仔在你退出应用后继续活着，还要开「自启动」并把「省电策略」设为无限制。要提前知道的限制：Android 12 起禁止后台启动前台服务，所以 15 分钟的看门狗只有在应用已忽略电池优化时才能把岛仔拉回来；待办卡片直接读小米笔记的数据库、需要 root，因为它不提供 provider；纯经典蓝牙耳机没有 GATT 服务可读，有些耳机只在自己的私有通道里报电量，所以芯片可能只有图标没有数字——把诊断那行发我，我能判断你属于哪种；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问四个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）与 music.163.com（联网歌词）。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/daozai/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/daozai/blob/main/android/README.md)
+          NOTES
+          echo "Publishing $TAG"
+          gh release create "$TAG" dist/*.apk --title "岛仔 $TAG" --notes-file notes.md \
+            || gh release upload "$TAG" dist/*.apk --clobber

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Draw the island above every app. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Keep the overlay alive while other apps are in front. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The island has to come back after a reboot, not only after the app is opened again. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Offered from the settings screen: an exempt app may restart its own service from a
+         background alarm, which is the only way to survive an aggressive MIUI killer. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Verification and pickup codes straight from the message, not the messaging app. -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- Call cards. The number needs READ_PHONE_STATE; the platform only hands it out below 12. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- Read the next clock alarm so the card can appear a few minutes before it rings. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Ask which app is in front, so the music card hides when the player is on screen again.
+         This is the "usage access" special permission; it is granted in system settings. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Two sockets in total, both HTTPS and both behind their own switch: the lyric lookup
+         against music.163.com while a track plays, and the temperature lookup against the
+         Open-Meteo endpoints once a city has been typed in. Nothing else connects. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Accessory names and the connected-device list. BLUETOOTH_CONNECT is a runtime grant on
+         Android 12+; the legacy permission covers the versions before it. BLUETOOTH_SCAN is only
+         used to find the BLE address of a pair of earbuds whose classic address refuses a GATT
+         connection, and it never leaves the phone. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+
+    <!-- Android 11+ hides other apps unless they are declared here. Without this block
+         getLaunchIntentForPackage("com.miui.weather2") answers null and the temperature tap ends up
+         in a browser, which is exactly what it used to do on MIUI 14. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="com.miui.weather2" />
+        <package android:name="com.miui.weather" />
+        <package android:name="com.huawei.android.totemweather" />
+        <package android:name="com.coloros.weather2" />
+        <package android:name="com.android.weather" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".IslandService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows notification content in an island overlay above other apps." />
+        </service>
+
+        <service
+            android:name=".IslandListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Only receives this app's own "alarm is close" pending intent. -->
+        <receiver
+            android:name=".AlarmWatcher"
+            android:exported="false" />
+
+        <!-- Restores the island after a reboot, after an update, and fifteen minutes after the
+             system killed the process. BOOT_COMPLETED is a protected broadcast, so exposing the
+             receiver cannot be abused by other apps. -->
+        <receiver
+            android:name=".KeepAlive"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

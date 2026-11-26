@@ -1,0 +1,30 @@
+岛仔 (Daozai) — a notification island for Android
+Copyright (c) 2026 Kreston8
+
+Credits, and the things this project deliberately does not claim.
+
+1. Inspiration: islandcn
+   The idea of a pill that follows notifications, and the design vocabulary used here, come from
+   islandcn — https://github.com/opencoredev/islandcn — MIT License, Copyright (c) 2026 Leo.
+   That project is a Next.js site plus a shadcn registry. No source code, asset or text from it is
+   included in this repository; the Android implementation is original Java written for 岛仔. The
+   credit is here because the inspiration is real, not because a licence requires it.
+
+2. Trademarks
+   "Dynamic Island" and 「灵动岛」 are trademarks of Apple Inc. This project is not affiliated with,
+   endorsed by or sponsored by Apple, and no Apple artwork, font or asset is bundled. The pill is
+   described generically as a notification island.
+   Xiaomi, Redmi, POCO, MIUI, HyperOS, NetEase Cloud Music and the app names listed in the README are
+   trademarks of their respective owners. They appear only to describe which devices and apps this
+   software works with. No icon, logo or resource file of theirs is redistributed here.
+
+3. Artwork
+   The launcher icon (one white capsule, two eyes, one smile) and the two animated eyes in the
+   standby pill are vector paths drawn for this project. They are original, not traced or adapted
+   from anyone else's artwork.
+
+4. Network services
+   Weather, geocoding and air-quality data come from Open-Meteo (https://open-meteo.com, data under
+   CC BY 4.0); the app sends only the city you typed. Lyrics come from the public endpoint of
+   music.163.com. Both are queried only while the corresponding feature is switched on. This
+   project is not affiliated with Open-Meteo or NetEase.

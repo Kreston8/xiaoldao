@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- floppy ears -->
+    <path
+        android:fillColor="#FFD9A24B"
+        android:pathData="M6.1,6.2c-1.9,0.5 -2.8,2.4 -2.5,4.7 0.25,2.2 1.25,3.5 2.5,3.5 0.95,0 1.7,-0.95 1.9,-2.3z" />
+    <path
+        android:fillColor="#FFD9A24B"
+        android:pathData="M17.9,6.2c1.9,0.5 2.8,2.4 2.5,4.7 -0.25,2.2 -1.25,3.5 -2.5,3.5 -0.95,0 -1.7,-0.95 -1.9,-2.3z" />
+    <!-- head -->
+    <path
+        android:fillColor="#FFF2C879"
+        android:pathData="M12,3.1c-4,0 -6.8,2.7 -6.8,6.8 0,4.1 3,7.6 6.8,7.6 3.8,0 6.8,-3.5 6.8,-7.6 0,-4.1 -2.8,-6.8 -6.8,-6.8z" />
+    <!-- muzzle -->
+    <path
+        android:fillColor="#FFFFE9BC"
+        android:pathData="M12,10.5c-1.55,0 -2.8,0.95 -2.8,2.2 0,1.25 1.25,2.3 2.8,2.3 1.55,0 2.8,-1.05 2.8,-2.3 0,-1.25 -1.25,-2.2 -2.8,-2.2z" />
+    <!-- eyes -->
+    <path
+        android:fillColor="#FF2A2018"
+        android:pathData="M9.55,8.1m-0.95,0a0.95,0.95 0 1,0 1.9,0a0.95,0.95 0 1,0 -1.9,0" />
+    <path
+        android:fillColor="#FF2A2018"
+        android:pathData="M14.45,8.1m-0.95,0a0.95,0.95 0 1,0 1.9,0a0.95,0.95 0 1,0 -1.9,0" />
+    <!-- nose -->
+    <path
+        android:fillColor="#FF2A2018"
+        android:pathData="M12,11.2c-0.62,0 -1.12,0.36 -1.12,0.8 0,0.44 0.5,0.8 1.12,0.8 0.62,0 1.12,-0.36 1.12,-0.8 0,-0.44 -0.5,-0.8 -1.12,-0.8z" />
+    <!-- smile -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF2A2018"
+        android:strokeWidth="0.6"
+        android:strokeLineCap="round"
+        android:pathData="M12,12.9v0.55M12,13.45c-0.5,0.55 -1.2,0.45 -1.5,0.05M12,13.45c0.5,0.55 1.2,0.45 1.5,0.05" />
+</vector>
