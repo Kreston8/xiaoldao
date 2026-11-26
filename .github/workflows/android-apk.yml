@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or update (leave empty for xiaoldao-v2.18.<run number>)"
+        description: "Release tag to create or update (leave empty for xiaoldao-v2.19.<run number>)"
         required: false
         default: ""
   push:
@@ -67,7 +67,7 @@ jobs:
           VERSION_CODE=$((1000 + ${{ github.run_number }}))
           gradle assembleRelease --no-daemon --stacktrace \
             -PversionCode="$VERSION_CODE" \
-            -PversionName="2.18.${{ github.run_number }}"
+            -PversionName="2.19.${{ github.run_number }}"
 
       # Advisory only: the artifact is verified locally afterwards, this just says which key signed it.
       - name: Check the signing certificate
@@ -84,7 +84,7 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk \
-          "dist/xiaoldao-2.18.${{ github.run_number }}.apk"
+          "dist/xiaoldao-2.19.${{ github.run_number }}.apk"
           ls -l dist
           unzip -l dist/*.apk | head -30
 
@@ -98,7 +98,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.18.${{ github.run_number }}"; fi
+          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.19.${{ github.run_number }}"; fi
           cat > notes.md <<'NOTES'
           ## English
 
@@ -106,9 +106,9 @@ jobs:
           小灵岛 (xiaoldao) is a notification island for Android: a black pill at the top of the screen that opens for messages, verification codes, pickup codes, deliveries, calls, alarms and the 网易云音乐 player with line-by-line lyrics, plus a small standby pill on the home screen with the clock, the temperature and the weather. Plain Java, two overlay windows, no WebView.
 
           **What is new in this build**
-          - **Coming back no longer takes fifteen minutes.** An alarm eight seconds out is queued the moment the task is swiped away — and again if the service is destroyed while the switch is still on — with the persisted ten-second job and the fifteen-minute watchdog behind it. The alarm is the reliable half: delivering a broadcast puts the app on Android's temporary allow-list for a few seconds, which is exactly the window in which a foreground service may be started from the background, and a refused attempt is not dropped — it retries after 30 s, 60 s, 3 min, 10 min, then every 15 minutes. Both paths answer "is the service still there" first, so the second one never restarts a service that is already running.
-          - **A pill that never hid for the wrong reason.** The launcher test used to believe "another app is in front" until the next usage event arrived; on a ROM that stops delivering them, that meant the standby pill and the lyrics card could stay invisible for the rest of the day. An answer older than two minutes is now thrown away and the next poll falls back to the safe default instead.
-          - **保活诊断, so this can be measured instead of guessed.** A new card prints the last sixty moments — service created, task removed, alarm fired, launch refused (with the exception name), and every change of the standby pill's visibility together with the three inputs behind it (switch, usage access, launcher in front) — with 复制诊断 and 清空记录 buttons. The 后台常驻 text now lists the four MIUI steps, including 设置 → 省电与电池 →「锁屏后清理内存」= 永不 and locking the card in the recent tasks.
+          - **农历, 节气 and the next festival.** The standby pill can now carry a line such as `八月十六 · 距寒露 5 天`. It is computed on the phone from two tables generated from an astronomical ephemeris (lunar dates 1900-2100, the 24 solar terms 2024-2074), and the lunar table was then decoded and walked day by day against the ephemeris again — 73,412 days, zero mismatches — so the date on screen is not a guess. No network, no permission, no location.
+          - **今天亮屏多久、解锁了几次.** Read from the system's own usage record — the same 使用情况访问 you already granted for the launcher test — and cached for two minutes, because a four-second poll that rescans the whole day is a battery cost for a number that barely moves. It adds up foreground time only and never looks at which apps you used.
+          - **Both are off by default, each with its own switch.** The pill is one line and the screen is 360 dp wide: with weather, AQI, the two eyes and the daily line already there, six items do not fit, so anything that would run past the edge is simply not drawn and the order you set decides which items win.
 
           **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS. Two of the four MIUI steps are buttons on the 后台常驻 card (自启动, 电池优化), the other two are in MIUI's own settings. Limits worth knowing: Android 12 and newer normally forbids starting a foreground service from the background, which is why the fast path is an alarm rather than only a job; a 强行停止 still cancels everything — alarms, jobs, sticky service — and that is the system's design, nothing an app schedules survives it; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Four hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md) · [中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md)
 
@@ -118,9 +118,9 @@ jobs:
           小灵岛是一个 Android 通知岛：屏幕顶部一颗黑色胶囊，为消息、验证码、取件码、快递、来电、闹钟和网易云音乐（带逐行歌词）弹开；桌面上还有一个更小的常驻药丸，显示时钟、气温和天气。纯 Java，两个 overlay 窗口，没有 WebView。
 
           **本次更新**
-          - **回来不用再等十五分钟了。** 任务被划掉的那一刻就排一个 8 秒后的闹钟；如果开关还开着、服务却被销毁，也排同一个。后面还有持久化的 10 秒 job 和 15 分钟看门狗兜底。闹钟是可靠的那一半：广播投递会让应用进入系统临时白名单几秒，正好是「允许从后台启动前台服务」的那个窗口；被拒的那次不会被丢掉，按 30 秒、60 秒、3 分钟、10 分钟重试，之后每 15 分钟一次。两条路都会先问一句「服务还在吗」，所以后到的那条不会把已经跑着的服务再启动一遍。
-          - **药丸不会因为一个过期判断整天不出现。** 以前的「桌面在前台」判定会一直相信上一次的「别的应用在前台」，直到下一个用量事件到达；碰上某个 ROM 干脆不投递事件，常驻药丸和歌词卡片就可能一整天都不出现。现在超过两分钟的旧判断会被丢掉，下一次轮询回到安全的默认值。
-          - **新增「保活诊断」，让这件事能被测量而不是靠猜。** 新卡片打印最近六十条记录：服务创建、任务被划掉、闹钟触发、启动被拒（带异常名）、以及常驻药丸每次显示/隐藏的变化和它背后的三个输入（开关、用量权限、桌面是否在前台），旁边是「复制诊断」和「清空记录」。「后台常驻」的说明也改成了 MIUI 的四步，补上 设置 → 省电与电池 →「锁屏后清理内存」= 永不，以及在最近任务里下拉加锁。
+          - **农历、节气、节日倒数。** 常驻岛可以多一行 `八月十六 · 距寒露 5 天`。这是手机上算的：两张表由星历生成（农历 1900–2100、二十四节气 2024–2074），农历表做出来之后又把整张表解一遍，从 1900 年走到 2100 年跟星历逐日对照——73412 天，零差异——所以显示出来的日期不是估的。不联网、不要权限、不要定位。
+          - **今天亮屏多久、解锁了几次。** 读系统自己的使用记录（就是「桌面判定」已经在用的那个使用情况访问），缓存两分钟：四秒一次的轮询要是每次把整天重扫一遍，就是拿电量换一个几乎不动的数字。只累加前台时长，不看你用了哪些应用。
+          - **两项默认关闭，各有开关。** 药丸只有一行、屏幕只有 360dp 宽：天气、AQI、两只眼睛和每日一句已经占了位置，六项摆不下，所以会超出屏幕的部分干脆不画，谁先显示由你设的顺序决定。
 
           **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS。「后台常驻」卡片上有两个按钮直达其中两步（自启动、电池优化），另外两步在 MIUI 自己的设置里。要提前知道的限制：Android 12 起默认禁止后台启动前台服务，所以快的那条路是闹钟而不是只用 job；「强行停止」仍然会清掉一切——闹钟、job、粘性服务全没了——这是系统的设计，应用排的任何任务都活不过它；待办卡片直接读小米笔记、需要 root，因为它不提供 provider；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问四个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）与 music.163.com（联网歌词）。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md)
           NOTES

@@ -84,11 +84,13 @@
 
     <string name="miui_hint">MIUI / HyperOS 提示：除上面几项权限，还需要在「应用管理 → 小灵岛 → 权限」里打开「后台弹出界面」，否则从后台弹不出胶囊。锁屏时系统会隐藏悬浮窗，这是系统限制。</string>
     <string name="label_standby">桌面常驻</string>
-    <string name="standby_hint">打开后，只要停在桌面，胶囊就一直在：按下面设定的顺序显示天气（带天气图标）、空气质量 AQI、小灵岛表情、每日一句。小灵岛只有两只眼睛——圆眼和弯眼微笑随机切换，偶尔眨一下。如果同时有通知卡片，两者每 3 秒轮换显示；播放音乐时由歌词条占位，这时来通知会先显示 3 秒再回到歌词。进任何 App 就收起，回到桌面再出现。</string>
+    <string name="standby_hint">打开后，只要停在桌面，胶囊就一直在：按下面设定的顺序显示天气（带天气图标）、空气质量 AQI、小灵岛表情、农历与节气、今天亮屏多久和解锁几次、每日一句。小灵岛只有两只眼睛——圆眼和弯眼微笑随机切换，偶尔眨一下。如果同时有通知卡片，两者每 3 秒轮换显示；播放音乐时由歌词条占位，这时来通知会先显示 3 秒再回到歌词。进任何 App 就收起，回到桌面再出现。项目太多会超出屏幕宽度，按顺序显示不下就不显示，建议只开常用的一两项。</string>
     <string name="label_standby_weather">天气温度</string>
     <string name="label_standby_puppy">小灵岛表情</string>
     <string name="label_standby_aqi">空气质量 AQI</string>
     <string name="label_standby_quote">每日一句</string>
+    <string name="label_standby_lunar">农历 · 节气</string>
+    <string name="label_standby_usage">屏幕时间 · 解锁</string>
     <string name="standby_order_title">显示顺序</string>
     <string name="standby_move_up">上移</string>
     <string name="standby_move_down">下移</string>

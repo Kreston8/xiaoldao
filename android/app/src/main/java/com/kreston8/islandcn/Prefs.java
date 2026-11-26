@@ -43,6 +43,8 @@ final class Prefs {
     static final String KEY_STANDBY_AQI = "sb_aqi";
     static final String KEY_STANDBY_QUOTE = "sb_quote";
     static final String KEY_STANDBY_ORDER = "sb_order";
+    static final String KEY_STANDBY_LUNAR = "sb_lunar";
+    static final String KEY_STANDBY_USAGE = "sb_usage";
     /** City name typed by the user; the only reason the weather request is ever made. */
     static final String KEY_CITY = "weather_city";
     /**
@@ -94,7 +96,8 @@ final class Prefs {
 
 
     /** The order a fresh install starts with, and the source of every known item. */
-    private static final String[] ORDER_DEFAULT = {"weather", "aqi", "puppy", "quote"};
+    private static final String[] ORDER_DEFAULT = {
+            "weather", "aqi", "puppy", "quote", "lunar", "usage"};
 
     private Prefs() {
     }

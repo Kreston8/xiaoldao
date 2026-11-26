@@ -359,6 +359,8 @@ final class StandbyView extends FrameLayout {
         boolean aqiOn = Prefs.get(context, Prefs.KEY_STANDBY_AQI);
         boolean faceOn = Prefs.get(context, Prefs.KEY_STANDBY_PUPPY);
         boolean quoteOn = Prefs.get(context, Prefs.KEY_STANDBY_QUOTE);
+        boolean lunarOn = Prefs.opt(context, Prefs.KEY_STANDBY_LUNAR);
+        boolean usageOn = Prefs.opt(context, Prefs.KEY_STANDBY_USAGE);
 
         String temperature = null;
         String air = null;
@@ -373,8 +375,11 @@ final class StandbyView extends FrameLayout {
             }
         }
         String quote = quoteOn ? quote(context) : "";
+        String lunarText = lunarOn ? Lunar.line(System.currentTimeMillis()) : "";
+        String usageText = usageOn ? Usage.today(context) : "";
         String next = String.join("|", order) + "#" + temperature + "#" + code + "#" + air
-                + "#" + faceOn + "#" + quoteOn + "#" + quote;
+                + "#" + faceOn + "#" + quoteOn + "#" + quote
+                + "#" + lunarOn + lunarText + "#" + usageOn + usageText;
         if (next.equals(signature)) {
             return hasContent;
         }
@@ -430,6 +435,30 @@ final class StandbyView extends FrameLayout {
                 // A double tap copies this exact line.
                 copyText = quote;
                 count++;
+            } else if ("lunar".equals(item)) {
+                if (!lunarOn || lunarText.isEmpty()) {
+                    continue;
+                }
+                TextView line = label(lunarText, 0xFFDDDDE4, 13f, true);
+                line.setSingleLine(true);
+                line.setMaxWidth(dp(150));
+                row.addView(line, margin());
+                if (copyText.isEmpty()) {
+                    copyText = lunarText;
+                }
+                count++;
+            } else if ("usage".equals(item)) {
+                if (!usageOn || usageText.isEmpty()) {
+                    continue;
+                }
+                TextView chip = label(usageText, 0xFFB8B8C2, 12.5f, true);
+                chip.setSingleLine(true);
+                chip.setMaxWidth(dp(170));
+                row.addView(chip, margin());
+                if (copyText.isEmpty()) {
+                    copyText = usageText;
+                }
+                count++;
             }
         }
         hasContent = count > 0;
@@ -465,6 +494,101 @@ final class StandbyView extends FrameLayout {
             return true;
         } catch (Throwable failure) {
             return false;
+        }
+    }
+
+    /**
+     * 今天亮了多久屏、解锁了几次。数据只来自系统自己的使用记录，不联网、不上传，也不关心你用
+     * 的是哪个应用（只累加前台时长，统计里不含应用名）。
+     *
+     * <p>缓存两分钟：轮询四秒一次，而这个数字一分钟也变不了多少，每次把整天的事件表重扫一遍
+     * 纯属拿电量换一个不动的字。
+     */
+    static final class Usage {
+        private static final long CACHE_MS = 120_000L;
+        private static final String NO_PERMISSION = "需使用情况访问";
+        private static int stamp;
+        private static long at;
+        private static String value;
+
+        private Usage() {
+        }
+
+        static String today(Context context) {
+            int day = stamp();
+            long now = System.currentTimeMillis();
+            if (value != null && day == stamp && now - at < CACHE_MS) {
+                return value;
+            }
+            stamp = day;
+            at = now;
+            String read;
+            try {
+                read = read(context);
+            } catch (Throwable failure) {
+                read = "";
+            }
+            value = read;
+            return read;
+        }
+
+        private static int stamp() {
+            java.util.Calendar calendar = java.util.Calendar.getInstance();
+            return calendar.get(java.util.Calendar.YEAR) * 1000
+                    + calendar.get(java.util.Calendar.DAY_OF_YEAR);
+        }
+
+        private static String read(Context context) {
+            if (!Perms.hasUsageAccess(context)) {
+                return NO_PERMISSION;
+            }
+            UsageStatsManager manager =
+                    (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
+            if (manager == null) {
+                return "";
+            }
+            java.util.Calendar calendar = java.util.Calendar.getInstance();
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            calendar.set(java.util.Calendar.MINUTE, 0);
+            calendar.set(java.util.Calendar.SECOND, 0);
+            calendar.set(java.util.Calendar.MILLISECOND, 0);
+            long start = calendar.getTimeInMillis();
+            long end = System.currentTimeMillis();
+            long foreground = 0;
+            java.util.Map<String, android.app.usage.UsageStats> all =
+                    manager.queryAndAggregateUsageStats(start, end);
+            if (all != null) {
+                for (android.app.usage.UsageStats stats : all.values()) {
+                    if (stats != null) {
+                        foreground += stats.getTotalTimeInForeground();
+                    }
+                }
+            }
+            int unlocks = 0;
+            UsageEvents events = manager.queryEvents(start, end);
+            if (events != null) {
+                UsageEvents.Event event = new UsageEvents.Event();
+                while (events.hasNextEvent()) {
+                    if (!events.getNextEvent(event)) {
+                        break;
+                    }
+                    if (event.getEventType() == UsageEvents.Event.KEYGUARD_HIDDEN) {
+                        unlocks++;
+                    }
+                }
+            }
+            if (foreground <= 0 && unlocks <= 0) {
+                return NO_PERMISSION;
+            }
+            return text(foreground, unlocks);
+        }
+
+        private static String text(long foreground, int unlocks) {
+            long minutes = foreground / 60_000L;
+            long hours = minutes / 60;
+            minutes = minutes % 60;
+            String used = hours > 0 ? hours + " 小时 " + minutes + " 分" : minutes + " 分";
+            return used + " · 解锁 " + unlocks;
         }
     }
 

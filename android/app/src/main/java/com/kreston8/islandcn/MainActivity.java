@@ -502,7 +502,9 @@ public final class MainActivity extends Activity {
                 || Prefs.KEY_STANDBY_WEATHER.equals(key)
                 || Prefs.KEY_STANDBY_AQI.equals(key)
                 || Prefs.KEY_STANDBY_PUPPY.equals(key)
-                || Prefs.KEY_STANDBY_QUOTE.equals(key);
+                || Prefs.KEY_STANDBY_QUOTE.equals(key)
+                || Prefs.KEY_STANDBY_LUNAR.equals(key)
+                || Prefs.KEY_STANDBY_USAGE.equals(key);
     }
 
     /**
@@ -659,6 +661,12 @@ public final class MainActivity extends Activity {
         if ("aqi".equals(item)) {
             return Prefs.KEY_STANDBY_AQI;
         }
+        if ("lunar".equals(item)) {
+            return Prefs.KEY_STANDBY_LUNAR;
+        }
+        if ("usage".equals(item)) {
+            return Prefs.KEY_STANDBY_USAGE;
+        }
         return Prefs.KEY_STANDBY_QUOTE;
     }
 
@@ -685,6 +693,12 @@ public final class MainActivity extends Activity {
         }
         if ("aqi".equals(item)) {
             return R.string.label_standby_aqi;
+        }
+        if ("lunar".equals(item)) {
+            return R.string.label_standby_lunar;
+        }
+        if ("usage".equals(item)) {
+            return R.string.label_standby_usage;
         }
         return R.string.label_standby_quote;
     }
