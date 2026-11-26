@@ -43,7 +43,7 @@ final class Updater {
     private static final String API =
             "https://api.github.com/repos/Kreston8/xiaoldao/releases?per_page=50";
 
-    /** Release tags look like {@code xiaoldao-v2.20.7}; anything else is ignored. */
+    /** Release tags look like {@code xiaoldao-v2.21.9}; anything else is ignored. */
     private static final String PREFIX = "xiaoldao-v";
 
     /** One hour between automatic checks. */
@@ -74,7 +74,7 @@ final class Updater {
     private Updater() {
     }
 
-    /** The version in the manifest, as built by CI: {@code 2.20.7}. */
+    /** The version in the manifest, as built by CI: {@code 2.21.9}. */
     static String versionName(Context context) {
         try {
             PackageInfo info = context.getPackageManager()
@@ -102,7 +102,7 @@ final class Updater {
         }
     }
 
-    /** What the settings screen prints: {@code 2.20.7（1007）}. */
+    /** What the settings screen prints: {@code 2.21.9（1009）}. */
     static String label(Context context) {
         return versionName(context) + "（" + versionCode(context) + "）";
     }
@@ -374,7 +374,7 @@ final class Updater {
         return connection;
     }
 
-    /** {@code 2.20.7} becomes {@code {2, 20, 7}}; anything unparsable becomes null. */
+    /** {@code 2.21.9} becomes {@code {2, 21, 9}}; anything unparsable becomes null. */
     private static int[] parse(String text) {
         if (text == null) {
             return null;

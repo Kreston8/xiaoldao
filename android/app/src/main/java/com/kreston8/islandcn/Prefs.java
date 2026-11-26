@@ -103,6 +103,8 @@ final class Prefs {
 
     /** Tag already downloaded into the cache directory, e.g. {@code xiaoldao-v2.21.8}. */
     static final String KEY_UPDATE_TAG = "update_tag";
+    /** Day/night switch; opt() means the app keeps its dark look until asked otherwise. */
+    static final String KEY_LIGHT_THEME = "light_theme";
 
     /** The order a fresh install starts with, and the source of every known item. */
     private static final String[] ORDER_DEFAULT = {

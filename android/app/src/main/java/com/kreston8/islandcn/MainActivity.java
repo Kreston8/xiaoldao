@@ -24,6 +24,7 @@ import android.view.ViewGroup;
 import android.widget.Switch;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -36,19 +37,43 @@ import java.util.function.Consumer;
 /** Setup screen: the two permissions, the on/off switch, and a preview button. */
 public final class MainActivity extends Activity {
 
-    private static final int COLOR_BG = 0xFF0A0A0C;
-    private static final int COLOR_CARD = 0xFF15151A;
-    private static final int COLOR_PRIMARY = 0xFFFFFFFF;
-    private static final int COLOR_SECONDARY = 0xFF9A9AA4;
-    private static final int COLOR_OK = 0xFF34C759;
-    private static final int COLOR_MISSING = 0xFFFF9F0A;
-    private static final int COLOR_IDLE = 0xFF7C7C86;
+    /**
+     * The palette, filled by {@link #applyTheme()} before a single view is built.
+     *
+     * <p>These are deliberately not constants: the day/night switch has to be able to hand
+     * the whole screen a different set of colours, and everything below reads them by name.
+     */
+    private int COLOR_BG;
+    private int COLOR_CARD;
+    private int COLOR_PRIMARY;
+    private int COLOR_SECONDARY;
+    private int COLOR_OK;
+    private int COLOR_MISSING;
+    private int COLOR_IDLE;
     /** Fill of the round "?" toggles; the one piece of chrome that is not a card. */
-    private static final int COLOR_HELP = 0xFF2A2A33;
+    private int COLOR_HELP;
+    /** Small print and hints, the monospaced log body, button fill, swatch hairline. */
+    private int COLOR_HINT;
+    private int COLOR_MONO;
+    private int COLOR_BUTTON;
+    private int COLOR_STROKE;
+    /** True while the light palette is in force; the switch in the title bar mirrors it. */
+    private boolean lightTheme;
     /** Fold key for the always-on card, which has a literal title rather than a string id. */
     private static final int FOLD_ALWAYS_ON = 1;
     /** Fold key for the changelog; small numbers stay clear of string resource ids. */
     private static final int FOLD_CHANGELOG = 2;
+    /** The diagnostic log, which used to be printed in full under its title. */
+    private static final int FOLD_DIAG = 3;
+    /** The gesture manual, folded, so the island page starts with the switch it is about. */
+    private static final int FOLD_HELP = 4;
+    /** Four pages behind the tab bar: 岛 / 常驻 / 权限 / 设置. */
+    private static final int PAGE_COUNT = 4;
+    private static final int PAGE_ISLAND = 0;
+    private static final int PAGE_STANDBY = 1;
+    private static final int PAGE_PERMS = 2;
+    private static final int PAGE_SETTINGS = 3;
+    private static final String[] PAGE_NAMES = {"岛", "常驻", "权限", "设置"};
 
     private TextView overlayState;
     private TextView accessState;
@@ -70,6 +95,14 @@ public final class MainActivity extends Activity {
     private TextView updateState;
     /** Disabled until a package is actually on disk, so it never looks broken when tapped. */
     private Button installButton;
+    /** One ScrollView per page, so each keeps its own scroll position while you switch. */
+    private View[] pages;
+    /** The column inside each page; every card goes into exactly one of these four. */
+    private LinearLayout[] columns;
+    /** The four tab labels, restyled by {@link #showPage(int)}. */
+    private TextView[] tabs;
+    /** Which page is showing; survives a recreate() through the instance state. */
+    private int page = 0;
     /** Fold keys of the small print the user has unfolded, kept for the life of the process. */
     private final java.util.Set<Integer> unfolded = new java.util.HashSet<Integer>();
     /** Every first-level switch, so resume can re-read them and rebuild the open second level. */
@@ -78,28 +111,49 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (savedInstanceState != null) {
+            page = savedInstanceState.getInt("page", 0);
+        }
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(COLOR_BG);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(32), dp(20), dp(36));
-        scroll.addView(root);
-        setContentView(scroll);
+        applyTheme();
 
-        LinearLayout titleRow = new LinearLayout(this);
-        titleRow.setOrientation(LinearLayout.HORIZONTAL);
-        titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        titleRow.addView(text(R.string.setup_title, 26f, COLOR_PRIMARY, true),
-                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        root.addView(titleRow);
+        LinearLayout screen = new LinearLayout(this);
+        screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setBackgroundColor(COLOR_BG);
+        setContentView(screen);
+        screen.addView(titleBar(), new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
 
-        TextView subtitle = text(R.string.setup_subtitle, 13f, COLOR_SECONDARY, false);
-        subtitle.setLineSpacing(dp(3), 1f);
-        LinearLayout subtitleBox = foldBox(R.string.setup_subtitle, subtitle);
-        addFill(root, subtitleBox, 8);
-        titleRow.addView(helpButton(R.string.setup_subtitle, subtitleBox), helpParams());
+        // One ScrollView per page, all built once: switching tabs then costs nothing and every
+        // page keeps its own scroll position.
+        FrameLayout host = new FrameLayout(this);
+        screen.addView(host, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        pages = new View[PAGE_COUNT];
+        columns = new LinearLayout[PAGE_COUNT];
+        for (int i = 0; i < PAGE_COUNT; i++) {
+            ScrollView scroller = new ScrollView(this);
+            scroller.setFillViewport(true);
+            scroller.setBackgroundColor(COLOR_BG);
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            column.setPadding(dp(16), dp(14), dp(16), dp(28));
+            scroller.addView(column);
+            scroller.setVisibility(View.GONE);
+            columns[i] = column;
+            pages[i] = scroller;
+            host.addView(scroller, new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT));
+        }
+        screen.addView(tabBar(), new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
+
+        // The cards below are written in one run of code but belong to four pages, so the
+        // current page column is simply re-pointed before each card is added.
+        LinearLayout root = columns[PAGE_PERMS];
+        addFill(root, text("「悬浮窗」是必须的，其余四项都可以不给，只是对应的功能会缺席。"
+                + "每次授权完回到这里，状态会自动重新读一遍。", 12f, COLOR_HINT, false), 2);
 
         LinearLayout overlayCard = permCard(R.string.perm_overlay_title, R.string.perm_overlay_desc, 0,
                 v -> Perms.openOverlaySettings(this));
@@ -126,6 +180,12 @@ public final class MainActivity extends Activity {
         usageState = permState(usageCard, R.string.missing);
         addFill(root, usageCard, 10);
 
+        root = columns[PAGE_ISLAND];
+        TextView subtitle = text(R.string.setup_subtitle, 12f, COLOR_HINT, false);
+        subtitle.setLineSpacing(dp(3), 1f);
+        addFill(root, foldRow("怎么用（单击 / 双击 / 左右滑 / 上滑 / 长按）", FOLD_HELP,
+                subtitle), 2);
+
         LinearLayout serviceCard = card();
         TextView serviceDesc = text(R.string.state_desc, 13f, COLOR_SECONDARY, false);
         serviceDesc.setLineSpacing(dp(3), 1f);
@@ -147,6 +207,7 @@ public final class MainActivity extends Activity {
         addFill(serviceCard, serviceRow, 12);
         addFill(root, serviceCard, 10);
 
+        root = columns[PAGE_SETTINGS];
         // Version, update buttons, and the changelog fold. The fold starts closed, which is the
         // whole point of it: the page should not open on a wall of release notes.
         LinearLayout updateCard = card();
@@ -193,8 +254,8 @@ public final class MainActivity extends Activity {
                 + "系统不允许静默安装，最后一步要在系统弹窗里点一次「安装」；"
                 + "第一次还需要允许本应用「安装未知应用」，这一步由系统设置页负责。"
                 + "下载走 api.github.com 和 objects.githubusercontent.com 两个地址，"
-                + "关掉这个开关就完全不联网检查。", 12f, 0xFF8A8A94, false), 6);
-        TextView changelog = text(Changelog.TEXT, 12f, 0xFFB8B8C2, false);
+                + "关掉这个开关就完全不联网检查。", 12f, COLOR_HINT, false), 6);
+        TextView changelog = text(Changelog.TEXT, 12f, COLOR_MONO, false);
         changelog.setLineSpacing(dp(4), 1f);
         addFill(updateCard, foldRow("版本更新日志", FOLD_CHANGELOG, changelog), 12);
         addFill(root, updateCard, 10);
@@ -229,14 +290,19 @@ public final class MainActivity extends Activity {
         addFill(keepCard, autoButton, 8);
         addFill(root, keepCard, 10);
         LinearLayout diagCard = card();
+        addFill(diagCard, text("保活诊断", 16f, COLOR_PRIMARY, true), 0);
+        // Sixty lines of log used to be printed the moment the screen opened; now the card is
+        // one line until somebody asks for the log on purpose.
         TextView diagDesc = text("退出应用之后到底发生了什么，这里会写成几行：任务被划掉、闹钟触发、"
-                + "启动请求被拒、常驻岛为什么被隐藏。复制之后可以直接贴给我。", 13f, COLOR_SECONDARY, false);
+                + "启动请求被拒、常驻岛为什么被隐藏。复制之后可以直接贴给我。", 12f, COLOR_HINT, false);
         diagDesc.setLineSpacing(dp(3), 1f);
-        helpHeader(diagCard, "保活诊断", FOLD_ALWAYS_ON, diagDesc);
-        diagText = text(Diag.text(this), 12f, 0xFFB8B8C2, false);
+        diagText = text(Diag.text(this), 12f, COLOR_MONO, false);
         diagText.setTypeface(Typeface.MONOSPACE);
         diagText.setTextIsSelectable(true);
-        addFill(diagCard, diagText, 10);
+        LinearLayout diagBody = new LinearLayout(this);
+        diagBody.setOrientation(LinearLayout.VERTICAL);
+        addFill(diagBody, diagDesc, 0);
+        addFill(diagBody, diagText, 10);
         LinearLayout diagRow = new LinearLayout(this);
         diagRow.setOrientation(LinearLayout.HORIZONTAL);
         Button copyButton = button("复制诊断", v -> copyDiag());
@@ -252,9 +318,11 @@ public final class MainActivity extends Activity {
         diagRow.addView(copyButton, copyParams);
         diagRow.addView(clearButton, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        addFill(diagCard, diagRow, 12);
+        addFill(diagBody, diagRow, 12);
+        addFill(diagCard, foldRow("查看最近 60 条记录", FOLD_DIAG, diagBody), 8);
         addFill(root, diagCard, 10);
 
+        root = columns[PAGE_ISLAND];
         LinearLayout featuresCard = card();
         addFill(featuresCard, text(R.string.settings_title, 16f, COLOR_PRIMARY, true), 0);
         addFill(featuresCard, text(R.string.settings_desc, 13f, COLOR_SECONDARY, false), 6);
@@ -270,8 +338,8 @@ public final class MainActivity extends Activity {
         primaryRow(rows, R.string.label_alarm, Prefs.KEY_ALARM, true, null);
         primaryRow(rows, R.string.label_music, Prefs.KEY_MUSIC, true,
                 box -> subRow(box, getString(R.string.label_lyrics), Prefs.KEY_LYRICS));
-        addFill(featuresCard, text(R.string.music_hint, 12f, 0xFF8A8A94, false), 12);
-        addFill(featuresCard, text(R.string.lyrics_hint, 12f, 0xFF8A8A94, false), 6);
+        addFill(featuresCard, text(R.string.music_hint, 12f, COLOR_HINT, false), 12);
+        addFill(featuresCard, text(R.string.lyrics_hint, 12f, COLOR_HINT, false), 6);
         addFill(root, featuresCard, 10);
 
         LinearLayout lookCard = card();
@@ -308,10 +376,14 @@ public final class MainActivity extends Activity {
             }
         });
         addFill(lookCard, alphaBar, 4);
-        alphaValue = text(R.string.look_alpha, 12f, 0xFF8A8A94, false);
+        alphaValue = text(R.string.look_alpha, 12f, COLOR_HINT, false);
         alphaValue.setText(getString(R.string.look_alpha_fmt, Look.percent(this)));
         addFill(lookCard, alphaValue, 2);
         addFill(root, lookCard, 10);
+
+        root = columns[PAGE_STANDBY];
+        addFill(root, text("常驻岛是桌面上那颗小药丸，只在桌面显示；主岛仍然是屏幕顶部的胶囊。",
+                12f, COLOR_HINT, false), 2);
 
         LinearLayout standbyCard = card();
         addFill(standbyCard, text(R.string.label_standby, 16f, COLOR_PRIMARY, true), 0);
@@ -324,19 +396,20 @@ public final class MainActivity extends Activity {
         renderStandbyRows();
         cityButton = button(R.string.weather_city_set, v -> askCity());
         addTop(standbyCard, cityButton, 12);
-        cityHint = text(R.string.weather_city_hint, 12f, 0xFF8A8A94, false);
+        cityHint = text(R.string.weather_city_hint, 12f, COLOR_HINT, false);
         cityHint.setLineSpacing(dp(3), 1f);
         addFill(standbyCard, cityHint, 6);
-        weatherState = text(R.string.weather_state_wait, 12f, 0xFF8A8A94, false);
+        weatherState = text(R.string.weather_state_wait, 12f, COLOR_HINT, false);
         weatherState.setLineSpacing(dp(3), 1f);
         addFill(standbyCard, weatherState, 8);
         addTop(standbyCard, button(R.string.weather_test, v -> testWeather()), 10);
         updateCity();
-        addFill(standbyCard, text(R.string.weather_city_desc, 12f, 0xFF8A8A94, false), 10);
-        addFill(standbyCard, text(R.string.standby_need_usage, 12f, 0xFF8A8A94, false), 6);
+        addFill(standbyCard, text(R.string.weather_city_desc, 12f, COLOR_HINT, false), 10);
+        addFill(standbyCard, text(R.string.standby_need_usage, 12f, COLOR_HINT, false), 6);
         addFill(root, standbyCard, 10);
 
-        TextView miui = text(R.string.miui_hint, 12f, 0xFF8A8A94, false);
+        root = columns[PAGE_SETTINGS];
+        TextView miui = text(R.string.miui_hint, 12f, COLOR_HINT, false);
         miui.setLineSpacing(dp(3), 1f);
         addFill(root, miui, 22);
 
@@ -346,6 +419,7 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
 
+        showPage(page);
         refreshState();
     }
 
@@ -357,6 +431,12 @@ public final class MainActivity extends Activity {
         syncPrimaries();
         restoreIfWanted();
         showReadyPackage();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt("page", page);
     }
 
     /** Re-reads the diagnostic log; the screen is reused, so this runs on every resume. */
@@ -827,7 +907,7 @@ public final class MainActivity extends Activity {
         EditText input = new EditText(this);
         input.setHint(R.string.weather_city_hint);
         input.setText(Prefs.text(this, Prefs.KEY_CITY));
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, dialogTheme())
                 .setTitle(R.string.weather_city_title)
                 .setMessage(R.string.weather_city_desc)
                 .setView(input)
@@ -889,7 +969,7 @@ public final class MainActivity extends Activity {
             GradientDrawable dot = new GradientDrawable();
             dot.setShape(GradientDrawable.OVAL);
             dot.setColor(color);
-            dot.setStroke(dp(on ? 2.5f : 1f), on ? 0xFFFFFFFF : 0xFF3C3C46);
+            dot.setStroke(dp(on ? 2.5f : 1f), on ? COLOR_PRIMARY : COLOR_STROKE);
             View swatch = new View(this);
             swatch.setBackground(dot);
             swatch.setContentDescription(getString(R.string.look_color));
@@ -906,7 +986,7 @@ public final class MainActivity extends Activity {
         custom.setShape(GradientDrawable.OVAL);
         custom.setColors(new int[]{0xFFFF3B30, 0xFFFFCC00, 0xFF34C759, 0xFF32ADE6, 0xFFAF52DE, 0xFFFF3B30});
         custom.setGradientType(GradientDrawable.SWEEP_GRADIENT);
-        custom.setStroke(dp(1f), 0xFF3C3C46);
+        custom.setStroke(dp(1f), COLOR_STROKE);
         View picker = new View(this);
         picker.setBackground(custom);
         picker.setContentDescription(getString(R.string.look_custom));
@@ -963,7 +1043,7 @@ public final class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT));
         if (extraRes != 0) {
-            TextView extra = text(extraRes, 12f, 0xFF8A8A94, false);
+            TextView extra = text(extraRes, 12f, COLOR_HINT, false);
             extra.setLineSpacing(dp(3), 1f);
             LinearLayout.LayoutParams extraParams = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -1161,6 +1241,128 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, resId, Toast.LENGTH_LONG).show();
     }
 
+    /**
+     * The title bar: the app name in the middle, the day/night switch pinned to the right.
+     *
+     * <p>Both side slots are the same width on purpose, so the name stays centred whatever the
+     * switch happens to measure on a given ROM.
+     */
+    private View titleBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(COLOR_BG);
+
+        View leftPad = new View(this);
+        bar.addView(leftPad, new LinearLayout.LayoutParams(dp(64), dp(1)));
+
+        TextView title = text(R.string.app_name, 18f, COLOR_PRIMARY, true);
+        title.setGravity(Gravity.CENTER);
+        bar.addView(title, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Switch night = new Switch(this);
+        night.setChecked(lightTheme);
+        night.setContentDescription("白天 / 黑夜主题");
+        // Checked first, listener second: otherwise building the bar would fire a recreate().
+        night.setOnCheckedChangeListener((toggle, checked) -> {
+            if (checked == lightTheme) {
+                return;
+            }
+            Prefs.set(this, Prefs.KEY_LIGHT_THEME, checked);
+            recreate();
+        });
+        LinearLayout holder = new LinearLayout(this);
+        holder.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        holder.addView(night, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        bar.addView(holder, new LinearLayout.LayoutParams(dp(64),
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        return bar;
+    }
+
+    /** The bottom tab bar: four equal cells, the current one ringed and bold. */
+    private View tabBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(8), 0, dp(8), 0);
+        bar.setBackgroundColor(COLOR_CARD);
+        tabs = new TextView[PAGE_COUNT];
+        for (int i = 0; i < PAGE_COUNT; i++) {
+            final int index = i;
+            TextView tab = text(PAGE_NAMES[i], 13f, COLOR_SECONDARY, false);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(4), dp(9), dp(4), dp(9));
+            tab.setOnClickListener(v -> showPage(index));
+            bar.addView(tab, new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            tabs[i] = tab;
+        }
+        return bar;
+    }
+
+    /** Shows one page and repaints the tab bar; nothing is rebuilt, so scroll positions stay. */
+    private void showPage(int index) {
+        if (pages == null || tabs == null || index < 0 || index >= PAGE_COUNT) {
+            return;
+        }
+        page = index;
+        for (int i = 0; i < PAGE_COUNT; i++) {
+            pages[i].setVisibility(i == index ? View.VISIBLE : View.GONE);
+            boolean on = i == index;
+            tabs[i].setTextColor(on ? COLOR_PRIMARY : COLOR_SECONDARY);
+            tabs[i].setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            tabs[i].setBackground(on ? rounded(COLOR_HELP, 12f) : null);
+        }
+        if (index == PAGE_SETTINGS) {
+            refreshDiag();
+        }
+    }
+
+    /** System dialogs (the city prompt) follow the same day/night choice as the page behind. */
+    private int dialogTheme() {
+        return lightTheme ? android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+                : android.R.style.Theme_DeviceDefault_Dialog_Alert;
+    }
+
+    /**
+     * Reads the theme switch and fills the palette. Called first thing in {@link #onCreate}, so no
+     * view is ever built with the previous set of colours.
+     */
+    private void applyTheme() {
+        lightTheme = Prefs.opt(this, Prefs.KEY_LIGHT_THEME);
+        COLOR_BG = lightTheme ? 0xFFF5F5F8 : 0xFF0A0A0C;
+        COLOR_CARD = lightTheme ? 0xFFFFFFFF : 0xFF15151A;
+        COLOR_PRIMARY = lightTheme ? 0xFF191920 : 0xFFFFFFFF;
+        COLOR_SECONDARY = lightTheme ? 0xFF64646E : 0xFF9A9AA4;
+        COLOR_OK = lightTheme ? 0xFF1E9E48 : 0xFF34C759;
+        COLOR_MISSING = lightTheme ? 0xFFC47000 : 0xFFFF9F0A;
+        COLOR_IDLE = lightTheme ? 0xFF8A8A93 : 0xFF7C7C86;
+        COLOR_HELP = lightTheme ? 0xFFE8E8EF : 0xFF2A2A33;
+        COLOR_HINT = lightTheme ? 0xFF77777F : 0xFF8A8A94;
+        COLOR_MONO = lightTheme ? 0xFF33333B : 0xFFB8B8C2;
+        COLOR_BUTTON = lightTheme ? 0xFFECECF2 : 0xFF23232B;
+        COLOR_STROKE = lightTheme ? 0xFFC8C8D1 : 0xFF3C3C46;
+        getWindow().setStatusBarColor(COLOR_BG);
+        getWindow().setNavigationBarColor(COLOR_BG);
+        View decor = getWindow().getDecorView();
+        int flags = decor.getSystemUiVisibility();
+        if (lightTheme) {
+            // Dark icons on a light bar; the reverse when the night palette is in force.
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+        } else {
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+        }
+        decor.setSystemUiVisibility(flags);
+    }
+
     private LinearLayout card() {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -1178,7 +1380,7 @@ public final class MainActivity extends Activity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextColor(COLOR_PRIMARY);
-        button.setBackground(rounded(0xFF23232B, 12f));
+        button.setBackground(rounded(COLOR_BUTTON, 12f));
         button.setPadding(dp(18), dp(8), dp(18), dp(8));
         button.setOnClickListener(listener);
         return button;

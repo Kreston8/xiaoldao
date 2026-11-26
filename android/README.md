@@ -10,6 +10,21 @@ A black pill sits at the top of the screen at a fixed height, and only its width
 It replaced an earlier WebView shell. Nothing here loads a web page. Two optional HTTPS lookups
 exist — per-line lyrics and a temperature — and both are described below with their limits.
 
+## How the screen is laid out
+
+Four pages, one tab each along the bottom bar: 岛 (the island itself), 常驻 (the standby pill),
+权限 (the five optional permissions) and 设置 (version, updates, keep-alive, diagnostics). Each
+page keeps its own scroll position, and switching costs nothing because all four are built once.
+
+The title bar is the app name, centred, with the day/night switch in the top-right corner. The
+choice is remembered and the screen is redrawn in the other palette the moment it is flipped.
+Dark is the default, because a black pill on a white page looks like a mistake. The island pill
+itself stays dark in both palettes: it sits on top of other apps, where a light pill would be
+unreadable.
+
+Two things that used to be printed in full are folded now — 版本更新日志 and 保活诊断. Both start
+closed, one tap to read, so neither page opens on a wall of text.
+
 ## What it shows
 
 Eight kinds of card remain: the first four are decided by `ContentParser` from title, body and
@@ -256,7 +271,8 @@ courier is kept rather than dropped. Outside that card:
 | Switch | Default | Effect |
 |---|---|---|
 | 桌面常驻 | off | the standby pill on the launcher |
-| 天气温度 / 空气质量 AQI / 小灵岛表情 / 每日一句 / 蓝牙电量 | on | which items the standby pill holds; each has its own switch on one row |
+| 天气温度 / 空气质量 AQI / 小灵岛表情 / 每日一句 | on | which items the standby pill holds; each has its own switch on one row |
+| 农历 · 节气 / 屏幕时间 · 解锁 | off | added in 2.19, off until asked for; each also has a maximum width, so a long line is dropped rather than wrapped |
 | 城市 | empty | no city means no weather request at all; a district works too (「北京 朝阳」) |
 
 ## Permissions the user has to grant
