@@ -94,7 +94,7 @@
     <string name="standby_move_down">下移</string>
     <string name="weather_city_title">天气城市</string>
     <string name="weather_city_hint">没填城市时不显示温度和 AQI；可以填到区，如「杭州 西湖」「北京 朝阳」</string>
-    <string name="weather_city_desc">填一个城市名（如 北京、杭州）换当前气温和空气质量。走 Open-Meteo 的三个公开接口：城市名换经纬度、取气温与天气代码、取 US AQI。HTTPS、6 秒超时、只放内存。这是「联网歌词」之外唯一会联网的地方，不用天气就一次都不请求；也不需要定位权限。</string>
+    <string name="weather_city_desc">填一个城市名（如 北京、杭州）换当前气温和空气质量。走 Open-Meteo 的三个公开接口：城市名换经纬度、取气温与天气代码、取 US AQI。HTTPS、6 秒超时；成功后的读数会存在本机，进程被杀后先显示上次的值再自动刷新。这是「联网歌词」之外唯一会联网的地方，不用天气就一次都不请求；也不需要定位权限。</string>
     <string name="weather_city_set">设置城市</string>
     <string name="weather_failed">天气获取失败</string>
     <string name="standby_need_usage">桌面常驻需要「使用情况访问」权限，否则判断不了是不是在桌面。</string>
@@ -143,6 +143,7 @@
     <string name="weather_state_nocity">没填城市：天气和 AQI 一定不会显示，点下面「设置城市」填一个</string>
     <string name="weather_state_wait">还没有结果，保存后等几秒会自动重试</string>
     <string name="weather_state_ago">%1$s · %2$d 秒前</string>
+    <string name="weather_state_cached">上次保存的读数（进程被杀后先显示它，随即自动刷新）</string>
     <string name="weather_ok_fmt">成功：%1$s，AQI %2$s</string>
     <string name="weather_err_network">连不上 %1$s（%2$s）</string>
     <string name="weather_err_place">地名接口找不到「%1$s」</string>
@@ -154,7 +155,7 @@
     <string name="label_delivery_shangou">闪购</string>
     <string name="label_delivery_jd">京东</string>
     <string name="label_delivery_qixian">七鲜</string>
-    <string name="weather_ok_place">已定位到 %1$s：%2$s°，AQI %3$s</string>
+    <string name="weather_ok_place">已定位到 %1$s：%2$s，AQI %3$s</string>
     <string name="hidden_temporarily">小灵岛已隐藏，3 分钟后自动回来</string>
     <string name="weather_no_app">没有找到天气应用</string>
     <string name="state_desc">开关记的是你的意愿：打开后前台服务常驻，通知来了才有岛可看；关掉就彻底退出，不会再自己冒出来。开机、更新之后会自动恢复，被系统清理时回到本页也会自动拉起来。</string>

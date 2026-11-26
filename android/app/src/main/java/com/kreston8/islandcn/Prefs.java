@@ -45,6 +45,24 @@ final class Prefs {
     static final String KEY_STANDBY_ORDER = "sb_order";
     /** City name typed by the user; the only reason the weather request is ever made. */
     static final String KEY_CITY = "weather_city";
+    /**
+     * The last weather reading that actually arrived, kept on disk.
+     *
+     * <p>A killed process used to leave the chip blank until the next request came back, which on a
+     * phone that kills the overlay every few hours meant "no weather most of the time". Five small
+     * values fix that: the next process paints the previous reading immediately and refreshes it in
+     * the background. {@link #KEY_WX_AT} is the wall clock of that reading, so a day-old value is
+     * still recognisable as old.
+     */
+    static final String KEY_WX_CITY = "wx_city";
+    static final String KEY_WX_TEMP = "wx_temp";
+    static final String KEY_WX_CODE = "wx_code";
+    static final String KEY_WX_AQI = "wx_aqi";
+    static final String KEY_WX_PLACE = "wx_place";
+    static final String KEY_WX_AT = "wx_at";
+    /** Coordinates the city resolved to, stored as text so 0 degrees stays a valid value. */
+    static final String KEY_WX_LAT = "wx_lat";
+    static final String KEY_WX_LON = "wx_lon";
     /** Look: the pill tint and its opacity, both stored as text so they need no typed reader. */
     static final String KEY_LOOK_COLOR = "look_color";
     static final String KEY_LOOK_ALPHA = "look_alpha";
@@ -303,6 +321,23 @@ final class Prefs {
             store(context).edit().putString(key, value).apply();
         } catch (Throwable ignored) {
             // A read-only profile keeps the previous value; the standby order still renders.
+        }
+    }
+
+    /** A stored timestamp, or 0 when the key was never written. */
+    static long number(Context context, String key) {
+        try {
+            return store(context).getLong(key, 0L);
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    static void setNumber(Context context, String key, long value) {
+        try {
+            store(context).edit().putLong(key, value).apply();
+        } catch (Throwable ignored) {
+            // A read-only profile keeps the previous value; the reading is fetched again anyway.
         }
     }
 

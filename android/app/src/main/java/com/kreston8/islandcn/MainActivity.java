@@ -6,6 +6,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
@@ -140,7 +141,8 @@ public final class MainActivity extends Activity {
         LinearLayout keepCard = card();
         TextView keepDesc = text("MIUI 上要让岛一直活着，需要三步：①「自启动」里允许本 App；"
                         + "②省电策略设为「无限制」；③在最近任务里把本 App 锁定。\n"
-                        + "本 App 已是前台服务，正常情况退出界面后仍会常驻。",
+                        + "本 App 已是前台服务，正常退出界面后仍会常驻；只有手动「强行停止」之后无法自动复活，"
+                        + "这是系统限制（任何 App 都一样），回到本页会自动重新拉起。",
                 13f, COLOR_SECONDARY, false);
         keepDesc.setLineSpacing(dp(3), 1f);
         helpHeader(keepCard, "后台常驻", FOLD_ALWAYS_ON, keepDesc);
@@ -159,6 +161,9 @@ public final class MainActivity extends Activity {
         keepRow.addView(appButton, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         addFill(keepCard, keepRow, 12);
+        Button autoButton = button("打开「自启动」设置", v -> openAutoStart());
+        autoButton.setTextSize(13f);
+        addFill(keepCard, autoButton, 8);
         addFill(root, keepCard, 10);
 
         LinearLayout featuresCard = card();
@@ -939,6 +944,36 @@ public final class MainActivity extends Activity {
         } catch (Throwable ignored) {
             Toast.makeText(this, "打不开应用设置页", Toast.LENGTH_LONG).show();
         }
+    }
+
+    /**
+     * MIUI's own autostart switch, the one that decides whether a swiped-away app may come back.
+     *
+     * <p>That page is not part of the public API, so the known class names are tried in order and
+     * the app details page is the fallback: a wrong guess has to stay silent, never fatal.
+     */
+    private void openAutoStart() {
+        String[][] pages = {
+                {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"},
+                {"com.miui.securitycenter", "com.miui.powercenter.PowerSettings"},
+        };
+        for (String[] page : pages) {
+            try {
+                startActivity(new Intent().setComponent(new ComponentName(page[0], page[1])));
+                return;
+            } catch (Throwable ignored) {
+                // Not this ROM, or the activity was renamed: try the next name.
+            }
+        }
+        try {
+            startActivity(new Intent("miui.intent.action.OP_AUTO_START")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        } catch (Throwable ignored) {
+            // No MIUI here.
+        }
+        Toast.makeText(this, "没找到自启动页，已打开应用设置页", Toast.LENGTH_LONG).show();
+        openAppSettings();
     }
 
     private void toast(int resId) {

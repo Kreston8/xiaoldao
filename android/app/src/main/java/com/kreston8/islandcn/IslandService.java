@@ -177,13 +177,21 @@ public final class IslandService extends Service implements IslandBridge.Sink {
      *
      * <p>Nothing is torn down here on purpose. The island lives in a foreground service with
      * {@code stopWithTask="false"}; only the activity is gone, so dropping the windows here would
-     * turn "close the app" into "the island is dead until the app is opened again". The watchdog
-     * alarm is re-armed as a second line of defence for the vendor killer.
+     * turn "close the app" into "the island is dead until the app is opened again".
+     *
+     * <p>Three things happen here, in the order that matters: the launcher test is re-run at once
+     * instead of on the next four-second tick, so the pill cannot blink out while the task is being
+     * torn down; a job is queued ten seconds out, because a job outlives this process and ten
+     * seconds is when the vendor killer usually strikes; and the fifteen-minute alarm is re-armed
+     * as the slow safety net behind both. Nothing here survives a user-initiated force-stop: the
+     * system cancels this package's alarms and jobs by design, and the settings screen says so.
      */
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         if (running) {
             KeepAlive.start(this);
+            RestoreJob.scheduleNow(this);
+            startStandby();
         }
         super.onTaskRemoved(rootIntent);
     }
@@ -326,6 +334,13 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         }
         standby = null;
         island = null;
+        if (Prefs.running(this)) {
+            // Not a deliberate stop (that path clears the flag first), so the process is being taken
+            // away while the island is still wanted: queue the fastest legal restart right here,
+            // because a scheduled job outlives this process and an unqueued one does not.
+            KeepAlive.start(this);
+            RestoreJob.scheduleNow(this);
+        }
         super.onDestroy();
     }
 
@@ -860,9 +875,16 @@ public final class IslandService extends Service implements IslandBridge.Sink {
                 .setContentText(getString(R.string.running_hint))
                 .setContentIntent(openIntent)
                 .setOngoing(true)
+                .setCategory(Notification.CATEGORY_SERVICE)
                 .setShowWhen(false)
                 .addAction(new Notification.Action.Builder(
                         (Icon) null, getString(R.string.stop_island), stopIntent).build());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Post the notification at the same instant the service becomes foreground. Deferring it
+            // is what lets a vendor killer treat the app as idle during the seconds right after a
+            // restart, which is exactly the window this watchdog chain is fighting for.
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+        }
 
         Notification notification = builder.build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

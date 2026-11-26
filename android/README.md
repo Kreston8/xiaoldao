@@ -42,12 +42,32 @@ itself is left in the shade, so the copy is never destructive. A swipe left clos
 the same notification never returns to the island, not even after the service restarts, and on an alarm
 card it also cancels the reminder slots of that alarm which have not been shown yet.
 
-### Bluetooth battery (removed in 2.16)
+### Bluetooth battery chips — removed in 2.16
 
-The accessory chip is removed rather than hidden, because Android has no public accessory-battery
-API: `BATTERY_LEVEL_CHANGED` needs `BLUETOOTH_PRIVILEGED`, and classic-only earbuds answer only over
-their vendor's own protocol. A chip that may never show a number is worse than no chip, so the app
-dropped `BLUETOOTH_CONNECT` and `BLUETOOTH_SCAN` too: it asks for no Bluetooth permission at all.
+**This feature is gone.** Android has no public accessory-battery API, so 2.16 deleted the chips
+and the `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` permissions along with them. What follows is kept
+as the record of why the dead ends were dead ends. If you are reading this before 2.16 in the
+release list, those builds still had it.
+
+When 蓝牙设备电量显示 is on, the right end of the pill shows one chip per connected accessory — watch,
+earbuds, mouse, anything else — as an icon with the percentage underneath, up to three devices. Each
+device has its own switch under that parent, so one watch can be hidden without hiding the rest, and
+a hidden device gets neither a chip nor a GATT read. A lyric line always carries the chips, because
+that is the moment the level matters; the pill widens instead of squeezing the text.
+
+Android has no public battery API for accessories, so a level is hunted down in three steps, cheapest
+first:
+
+1. the hidden `BluetoothDevice.getBatteryLevel()`, which is the number Settings shows — greylisted, so
+   some ROMs answer -1 or throw;
+2. the platform's own `BATTERY_LEVEL_CHANGED` broadcast, sent when a device pushes a level (typically
+   at connect), cached and persisted;
+3. a GATT read of the standard battery service (`0x180F`/`0x2A19`), LE and dual-mode devices only, at
+   most once every ten minutes per address, closing the connection as soon as the value arrives.
+
+Consequences worth knowing: a classic-only headset has no GATT server, so for those only the first two
+steps can answer; a device that never reports keeps its icon and shows `--`, because a wrong number on
+a watch is worse than none.
 
 ### Standby pill (桌面常驻)
 
@@ -67,11 +87,13 @@ the items you enabled:
   an approximation of the mascot, not the original artwork.
 - **每日一句** — one line of encouragement at 17.5sp in a bold serif face (宋体). The index is
   days-since-epoch × 7 mod 30, so it lands on a different line every day instead of walking the list.
+- **蓝牙电量** — the same accessory percentages as the chips, read through the passive path only: the
+  standby pill never opens a GATT connection, so its 4-second refresh cannot disturb a headset.
 - **Double tap to copy** — a double tap on the standby pill copies only the 每日一句 sentence; a
   double tap on a pickup-code card copies only the bare code, without the 驿站名： prefix. No other
   card copies anything.
 
-The four items sit one per row — switch, name, 上移, 下移 — under the master switch, so hiding an item
+The five items sit one per row — switch, name, 上移, 下移 — under the master switch, so hiding an item
 never needs a reorder. While a notification card exists as well the two swap every 3 seconds, and
 closing that notification by hand leaves the standby pill alone on screen. A lyric line outranks both:
 it keeps the pill, gives a fresh notification exactly 3 seconds, then comes back at the position the
@@ -115,6 +137,15 @@ is a live preview.
   width is re-measured per card, so a long delivery line makes it wider and a short code narrower.
   `OvershootInterpolator` gives the spring when the width changes. That height holds two lines, which
   is why a copyable code sits in the title row and a countdown takes over the body line.
+- `BtWatcher` (`BtWatcher.java`) is the battery reading, in three steps: the hidden
+  `BluetoothDevice.getBatteryLevel()` (the same number Settings prints), then the hidden
+  `BATTERY_LEVEL_CHANGED` broadcast, then a GATT read of the standard battery service
+  (`0x180F`/`0x2A19`) for LE and dual-mode devices. A read opens a connection to the accessory, so
+  each address is asked at most once every ten minutes and the link is closed the moment the value
+  arrives, or after nine seconds. The last known level per address lives in `SharedPreferences`, and a
+  fresh one is pushed to the card through a listener instead of waiting for the next notification.
+  Every platform call is guarded: without `BLUETOOTH_CONNECT` nothing is read rather than the overlay
+  crashing.
 - `StandbyView` (`StandbyView.java`) renders the standby pill and owns both lookups: geocoding
   (`geocoding-api.open-meteo.com`) turns the typed city into coordinates, then
   `api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code` returns the temperature and the
@@ -122,11 +153,16 @@ is a live preview.
   adds the AQI. The city may name a district: ten candidates are requested in Chinese (with
   `countryCode=CN` when the input is Han) and each is scored — exact name match 60, district
   `admin3` 55, city `admin2` 50, province `admin1` 35, prefix 40 — so 「杭州 西湖」 lands on 西湖区
-  rather than 杭州市, and the resolved label is printed as 已定位到 … so a miss is visible instead of
-  silent. 6 s timeout, memory cache for 30 minutes, one request in flight, nothing requested
-  without a city. A non-2xx answer throws with its status code instead of being parsed as empty, the
-  latest outcome is kept as a line the app prints under the city field (立即测试天气 runs one request
-  on the spot), and a failure parks the network for 90 s rather than letting the 4 s tick hammer it.
+  rather than 杭州市, and the resolved label is printed as 已定位到 … so a miss is visible instead of silent.
+  6 s timeout, one request in flight, nothing requested without a city. A non-2xx answer throws
+  with its status code instead of being parsed as empty, and the latest outcome is kept as a line
+  the app prints under the city field (立即测试天气 runs one request on the spot).
+  A successful reading is written to this device — temperature, WMO code, AQI, resolved place and
+  coordinates, stamped with the city name and the time — so a killed process shows the last known
+  number at once instead of an empty chip until the next answer arrives; an entry older than 12
+  hours is dropped. Those coordinates are reused, so the usual tick needs one request instead of
+  two. A failure now retries after 90 s, then 3 min, then 10 min, then every 30 min, and a half
+  answer (a forecast without an AQI) is merged with the previous value instead of blanking it.
   `xiaoldaoView` (`xiaoldaoView.java`) draws the mascot: two eyes and nothing else. A hash of the 2.4 s
   mood slot picks round eyes or a smiling crescent, a second hash of a 1.7 s slot decides the blinks
   (a quarter of them skipped) with a small bounce afterwards, and a third of a 1.2 s slot moves the
@@ -141,9 +177,9 @@ is a live preview.
   or a missing usage-access grant cancels it. One card per track.
 - `Prefs` (`Prefs.java`) is the switch store: one boolean per first-level feature (`on_wechat`,
   `on_qq`, `on_pickup`, `on_delivery` plus `dl_meituan` / `dl_shangou` / `dl_jd` / `dl_qixian`,
-  `on_todo`, `on_call`, `on_alarm`, `on_music` with `on_lyrics`), `on_standby` plus four item switches
-  and an order string for the standby pill, the typed city, and the two look values `look_color`
-  (`#RRGGBB`) and `look_alpha` (`0`–`100`).
+  `on_todo`, `on_call`, `on_alarm`, `on_music` with `on_lyrics`, `on_bt` with one `bt_ok:<address>`
+  per accessory), `on_standby` plus five item switches and an order string for the standby pill, the
+  typed city, and the two look values `look_color` (`#RRGGBB`) and `look_alpha` (`0`–`100`).
   `IslandService.allow()` is the whitelist: it decides whether an event may exist at all, then
   `Prefs.enabled()` drops a card whose own switch is off, both before the overlay is touched.
 - `Look` (`Look.java`) holds the two look values and turns them into what a drawable wants: the tint
@@ -194,7 +230,7 @@ recording) is dropped instead of shown out of sync.
 
 ## The switches
 
-The app is a two-level list. Eight first-level switches, top to bottom:
+The app is a two-level list. Nine first-level switches, top to bottom:
 
 | First level | Default | Second level (only while the parent is on) |
 |---|---|---|
@@ -206,6 +242,7 @@ The app is a two-level list. Eight first-level switches, top to bottom:
 | 来电显示 | on | — |
 | 闹钟 | on | — |
 | 音乐播放与歌词 | on | 联网歌词 — the one lyric lookup per track |
+| 蓝牙设备电量显示 | on | one switch per connected accessory, listed live |
 
 A second level only exists while its parent is on: closing the parent folds the sub-list away and
 throws its rows out, so nothing stays rendered behind a closed switch. Everything that is not in
@@ -219,7 +256,7 @@ courier is kept rather than dropped. Outside that card:
 | Switch | Default | Effect |
 |---|---|---|
 | 桌面常驻 | off | the standby pill on the launcher |
-| 天气温度 / 空气质量 AQI / 小灵岛表情 / 每日一句 | on | which items the standby pill holds; each has its own switch on one row |
+| 天气温度 / 空气质量 AQI / 小灵岛表情 / 每日一句 / 蓝牙电量 | on | which items the standby pill holds; each has its own switch on one row |
 | 城市 | empty | no city means no weather request at all; a district works too (「北京 朝阳」) |
 
 ## Permissions the user has to grant
@@ -232,15 +269,23 @@ courier is kept rather than dropped. Outside that card:
 5. **Usage access** (`PACKAGE_USAGE_STATS`), optional but required for the desktop-only rule and for
    the standby pill: it is how the app knows the launcher is in front. One cheap query every 2.5 s
    while a track plays, and one every 4 s while the standby pill is active.
-6. On MIUI / HyperOS also enable **后台弹出界面** for this app, otherwise the system drops overlays
+6. **Nearby devices** (`BLUETOOTH_CONNECT`, plus `BLUETOOTH_SCAN` with `neverForLocation` on Android
+   12+), optional, for the names, the connected-device list and the short BLE twin scan behind the
+   battery chips.
+7. On MIUI / HyperOS also enable **后台弹出界面** for this app, otherwise the system drops overlays
    started from the background.
-7. Android 13+ asks for `POST_NOTIFICATIONS` so the foreground service can show its status
+8. Android 13+ asks for `POST_NOTIFICATIONS` so the foreground service can show its status
    notification.
-8. **Battery optimisation** (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, optional), plus 自启动 and an
-   unrestricted 省电策略 in the MIUI app page. Android 12+ refuses to start a foreground service from
-   the background, so the 15-minute watchdog can only bring the island back while the app is exempt.
-   The 后台常驻 card in Settings shows the state and opens both screens; `RECEIVE_BOOT_COMPLETED`
-   (no prompt) is what restores the island after a reboot, and only if you had it running.
+9. **Battery optimisation** (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, optional), plus 自启动 and
+   an unrestricted 省电策略 in the MIUI app page. Android 12+ refuses to start a foreground service
+   from the background, so the watchdog only brings the island back while the app is exempt.
+   Leaving the app now counts: `onTaskRemoved` queues the watchdog **and** a persisted one-shot
+   `JobScheduler` job for 10 s later, and a service destroyed while the switch is still on does the
+   same, so the usual gap between being killed and coming back is seconds instead of 15 minutes.
+   The 后台常驻 card shows the state, and its 打开「自启动」设置 button jumps straight to the MIUI
+   auto-start screen (falling back to the app page). `RECEIVE_BOOT_COMPLETED` (no prompt) restores
+   the island after a reboot, and only if you had it running. A 强行停止 still cancels everything:
+   nothing an app schedules survives that, which is the system's design and not a bug.
 
 ## What it is not
 
@@ -273,8 +318,8 @@ courier is kept rather than dropped. Outside that card:
   screen and the standby pill never appears.
 - 天气温度 and 空气质量 AQI need a city typed by hand and hit two hosts on Open-Meteo: `api.open-meteo.com`
   for the forecast and `air-quality-api.open-meteo.com` for the AQI, with
-  `geocoding-api.open-meteo.com` turning the name into coordinates. None of that is a promise the
-  system makes.
+  `geocoding-api.open-meteo.com` turning the name into coordinates. The accessory percentage needs the
+  device to report and `BLUETOOTH_CONNECT`. None of that is a promise the system makes.
 
 ## Build
 

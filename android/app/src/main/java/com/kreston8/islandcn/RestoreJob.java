@@ -32,6 +32,12 @@ public final class RestoreJob extends JobService {
     /** The platform floor for periodic jobs. */
     private static final long PERIOD_MS = 15 * 60_000L;
 
+    /** Id of the one-shot nudge, kept apart so it never replaces the periodic watchdog. */
+    private static final int NOW_ID = 73;
+
+    /** How soon the fast attempt runs after the process lost its task. */
+    private static final long NOW_MS = 10_000L;
+
     /**
      * Idempotent; safe to call on every start. Silently does nothing if the platform refuses the
      * job, because a missing watchdog must never break the actual island.
@@ -52,6 +58,31 @@ public final class RestoreJob extends JobService {
         }
     }
 
+    /**
+     * One attempt about ten seconds from now, for the moment the settings screen is swiped away.
+     *
+     * <p>The periodic job above is the safety net that survives a reboot; this is the one that
+     * matters in the common case, where the vendor killer takes the process right after the task
+     * disappears. Ten seconds is late enough that the system has finished tearing the task down and
+     * early enough that the person still sees the pill come back instead of an empty home screen.
+     */
+    static void scheduleNow(Context context) {
+        JobScheduler scheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+        if (scheduler == null) {
+            return;
+        }
+        JobInfo job = new JobInfo.Builder(NOW_ID, new ComponentName(context, RestoreJob.class))
+                .setMinimumLatency(NOW_MS)
+                .setOverrideDeadline(NOW_MS + 5_000L)
+                .setPersisted(true)
+                .build();
+        try {
+            scheduler.schedule(job);
+        } catch (RuntimeException ignored) {
+            // Quota or a vendor block: the periodic job and the settings screen still cover it.
+        }
+    }
+
     static void cancel(Context context) {
         JobScheduler scheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
         if (scheduler == null) {
@@ -59,6 +90,7 @@ public final class RestoreJob extends JobService {
         }
         try {
             scheduler.cancel(JOB_ID);
+            scheduler.cancel(NOW_ID);
         } catch (RuntimeException ignored) {
             // Nothing scheduled is the same outcome as a successful cancel.
         }

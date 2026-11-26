@@ -614,6 +614,8 @@ final class StandbyView extends FrameLayout {
     static final class Weather {
 
         private static final long TTL_MS = 30 * 60_000L;
+        /** A reading older than this is not shown at all: yesterday's temperature is a lie. */
+        private static final long KEEP_MS = 12 * 3600_000L;
         private static final int TIMEOUT_MS = 6000;
         private static final int MAX_BYTES = 64 * 1024;
 
@@ -626,7 +628,19 @@ final class StandbyView extends FrameLayout {
         private static long statusAt;
         /** Nothing is asked again before this moment after a failure. */
         private static long retryAt;
-        private static final long FAIL_MS = 90_000L;
+        /**
+         * The pause after a failure grows instead of staying at ninety seconds forever: a dropped
+         * packet deserves a quick second try, a host that keeps refusing deserves to be left alone.
+         * Any success puts the counter back to zero, so the next real hiccup is fast again.
+         */
+        private static final long[] FAIL_MS = {90_000L, 180_000L, 600_000L, 1_800_000L};
+        private static int fails;
+        /** Coordinates the city resolved to last time, so a geocoding hiccup is not fatal. */
+        private static double lat = Double.NaN;
+        private static double lon = Double.NaN;
+        private static String place = "";
+        /** The disk copy is read at most once per process. */
+        private static boolean restored;
 
         private Weather() {
         }
@@ -654,12 +668,17 @@ final class StandbyView extends FrameLayout {
                 return null;
             }
             String wanted = name.trim();
+            restore(context, wanted);
             if (!wanted.equals(city)) {
                 // A different city invalidates the old reading instead of showing it for a while.
                 city = wanted;
                 cache = null;
                 at = 0L;
                 retryAt = 0L;
+                fails = 0;
+                lat = Double.NaN;
+                lon = Double.NaN;
+                place = "";
                 status = "";
                 statusAt = 0L;
             }
@@ -674,6 +693,83 @@ final class StandbyView extends FrameLayout {
             }
             fetch(context, wanted, done);
             return cache;
+        }
+
+        /**
+         * Paints the previous reading before the network is even asked.
+         *
+         * <p>This process is killed often on a phone like this one, and the chip used to be blank
+         * from every restart until the first request came back: up to six seconds of "no weather",
+         * or ninety seconds and more when the first request failed. A reading of the same city that
+         * is at most {@link #KEEP_MS} old is worth showing at once; the refresh below replaces it.
+         */
+        private static void restore(Context context, String wanted) {
+            if (restored) {
+                return;
+            }
+            restored = true;
+            long stamp = Prefs.number(context, Prefs.KEY_WX_AT);
+            long now = System.currentTimeMillis();
+            if (stamp <= 0L || now < stamp || now - stamp > KEEP_MS
+                    || !wanted.equals(Prefs.text(context, Prefs.KEY_WX_CITY))) {
+                return;
+            }
+            String temp = Prefs.text(context, Prefs.KEY_WX_TEMP);
+            String air = Prefs.text(context, Prefs.KEY_WX_AQI);
+            if (temp.isEmpty() && air.isEmpty()) {
+                return;
+            }
+            String label = Prefs.text(context, Prefs.KEY_WX_PLACE);
+            city = wanted;
+            cache = new Reading(temp.isEmpty() ? null : temp,
+                    (int) Prefs.number(context, Prefs.KEY_WX_CODE),
+                    air.isEmpty() ? null : air, label);
+            at = stamp;
+            place = label;
+            lat = coordinate(Prefs.text(context, Prefs.KEY_WX_LAT));
+            lon = coordinate(Prefs.text(context, Prefs.KEY_WX_LON));
+            status = context.getString(R.string.weather_state_cached);
+            statusAt = stamp;
+            retryAt = 0L;
+        }
+
+        /** A stored coordinate, or NaN when it was never written. */
+        private static double coordinate(String raw) {
+            try {
+                return raw == null || raw.isEmpty() ? Double.NaN : Double.parseDouble(raw);
+            } catch (NumberFormatException ignored) {
+                return Double.NaN;
+            }
+        }
+
+        /** Keeps the reading for the next process: seven short values in the preference file. */
+        private static void save(Context context, String wanted, Reading reading, long stamp) {
+            Prefs.setText(context, Prefs.KEY_WX_CITY, wanted);
+            Prefs.setText(context, Prefs.KEY_WX_TEMP, reading.temp == null ? "" : reading.temp);
+            Prefs.setNumber(context, Prefs.KEY_WX_CODE, reading.code);
+            Prefs.setText(context, Prefs.KEY_WX_AQI, reading.aqi == null ? "" : reading.aqi);
+            Prefs.setText(context, Prefs.KEY_WX_PLACE, reading.place == null ? "" : reading.place);
+            Prefs.setNumber(context, Prefs.KEY_WX_AT, stamp);
+            Prefs.setText(context, Prefs.KEY_WX_LAT, Double.isNaN(lat) ? "" : Double.toString(lat));
+            Prefs.setText(context, Prefs.KEY_WX_LON, Double.isNaN(lon) ? "" : Double.toString(lon));
+        }
+
+        /**
+         * Fills a half answer from the previous one, so one endpoint failing blanks nothing.
+         *
+         * <p>The forecast and the air-quality call are two requests to two hosts and either can time
+         * out alone. Keeping the older half beats dropping the temperature for half an hour because
+         * the AQI host was slow; the next successful request overwrites both again.
+         */
+        private static Reading merge(Reading fresh) {
+            if (cache == null) {
+                return fresh;
+            }
+            String temp = fresh.temp == null ? cache.temp : fresh.temp;
+            int code = fresh.temp == null ? cache.code : fresh.code;
+            String air = fresh.aqi == null ? cache.aqi : fresh.aqi;
+            return new Reading(temp, code, air,
+                    fresh.place == null || fresh.place.isEmpty() ? cache.place : fresh.place);
         }
 
         private static void fetch(final Context context, final String wanted, final Runnable done) {
@@ -694,8 +790,10 @@ final class StandbyView extends FrameLayout {
                 busy = false;
                 new Handler(Looper.getMainLooper()).post(() -> {
                     if (result != null && wanted.equals(city)) {
-                        cache = result;
+                        Reading keep = merge(result);
+                        cache = keep;
                         at = System.currentTimeMillis();
+                        save(context, wanted, keep, at);
                     }
                     if (done != null) {
                         done.run();
@@ -707,33 +805,45 @@ final class StandbyView extends FrameLayout {
         }
 
         private static Reading request(Context context, String name) {
-            // 「杭州 西湖」 must be asked as 西湖: the endpoint matches one place name, so the pair
-            // used to come back empty and the chip stayed on 杭州市.
-            String term = lookupTerm(name);
-            JSONObject found = search(context, term);
-            if (found == null) {
-                return null;
-            }
-            JSONArray results = found.optJSONArray("results");
-            if ((results == null || results.length() == 0) && !term.equals(name)) {
-                // The split term failed, so the user probably typed one long name; try it whole.
-                JSONObject whole = search(context, name);
-                JSONArray again = whole == null ? null : whole.optJSONArray("results");
-                if (again != null && again.length() > 0) {
-                    results = again;
-                    term = name;
-                }
-            }
-            JSONObject place = results == null ? null : pick(results, term);
-            if (place == null) {
-                mark(context, context.getString(R.string.weather_err_place, name), false);
-                return null;
-            }
-            double latitude = place.optDouble("latitude", Double.NaN);
-            double longitude = place.optDouble("longitude", Double.NaN);
+            double latitude = lat;
+            double longitude = lon;
+            String label = place;
             if (Double.isNaN(latitude) || Double.isNaN(longitude)) {
-                mark(context, context.getString(R.string.weather_err_place, name), false);
-                return null;
+                // 「杭州 西湖」 must be asked as 西湖: the endpoint matches one place name, so the pair
+                // used to come back empty and the chip stayed on 杭州市.
+                String term = lookupTerm(name);
+                JSONObject found = search(context, term);
+                if (found == null) {
+                    return null;
+                }
+                JSONArray results = found.optJSONArray("results");
+                if ((results == null || results.length() == 0) && !term.equals(name)) {
+                    // The split term failed, so the user probably typed one long name; try it whole.
+                    JSONObject whole = search(context, name);
+                    JSONArray again = whole == null ? null : whole.optJSONArray("results");
+                    if (again != null && again.length() > 0) {
+                        results = again;
+                        term = name;
+                    }
+                }
+                JSONObject spot = results == null ? null : pick(results, term);
+                if (spot == null) {
+                    mark(context, context.getString(R.string.weather_err_place, name), false);
+                    return null;
+                }
+                latitude = spot.optDouble("latitude", Double.NaN);
+                longitude = spot.optDouble("longitude", Double.NaN);
+                if (Double.isNaN(latitude) || Double.isNaN(longitude)) {
+                    mark(context, context.getString(R.string.weather_err_place, name), false);
+                    return null;
+                }
+                label = placeLabel(spot);
+                // Remembered for the rest of this process, and written to disk with the next good
+                // reading: the geocoding host is the one that fails most, and losing the coordinates
+                // takes the whole chip with it.
+                lat = latitude;
+                lon = longitude;
+                place = label;
             }
 
             String temperature = null;
@@ -773,11 +883,11 @@ final class StandbyView extends FrameLayout {
                         false);
                 return null;
             }
-            String label = placeLabel(place);
-            mark(context, context.getString(R.string.weather_ok_place, label,
+            String shown = label == null ? "" : label;
+            mark(context, context.getString(R.string.weather_ok_place, shown,
                     temperature == null ? "-" : temperature,
                     air == null ? "-" : air), true);
-            return new Reading(temperature, code, air, label);
+            return new Reading(temperature, code, air, shown);
         }
         /** One geocoding call, or null after marking why it failed. */
         private static JSONObject search(Context context, String term) {
@@ -919,7 +1029,15 @@ final class StandbyView extends FrameLayout {
         private static void mark(Context context, String message, boolean ok) {
             status = message;
             statusAt = System.currentTimeMillis();
-            retryAt = ok ? 0L : statusAt + FAIL_MS;
+            if (ok) {
+                fails = 0;
+                retryAt = 0L;
+                return;
+            }
+            // 90 s, 3 min, 10 min, then half an hour: long enough that a broken host is left alone,
+            // short enough that the first hiccup of the day is retried before anyone notices.
+            retryAt = statusAt + FAIL_MS[Math.min(fails, FAIL_MS.length - 1)];
+            fails++;
         }
 
         /**
@@ -932,6 +1050,9 @@ final class StandbyView extends FrameLayout {
             if (saved.isEmpty()) {
                 return context.getString(R.string.weather_state_nocity);
             }
+            // The settings screen is often the first thing to run in a fresh process; reading the disk
+            // copy here means the line shows the last real answer instead of "waiting".
+            restore(context, saved);
             if (status == null || status.isEmpty() || statusAt <= 0L) {
                 return context.getString(R.string.weather_state_wait);
             }
@@ -959,6 +1080,7 @@ final class StandbyView extends FrameLayout {
                 city = wanted;
                 cache = value;
                 at = System.currentTimeMillis();
+                save(context, wanted, value, at);
             }
             return status == null || status.isEmpty()
                     ? context.getString(R.string.weather_err_empty) : status;
