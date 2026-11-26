@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or update (leave empty for xiaoldao-v2.22.<run number>)"
+        description: "Release tag to create or update (leave empty for xiaoldao-v2.23.<run number>)"
         required: false
         default: ""
   push:
@@ -67,7 +67,7 @@ jobs:
           VERSION_CODE=$((1000 + ${{ github.run_number }}))
           gradle assembleRelease --no-daemon --stacktrace \
             -PversionCode="$VERSION_CODE" \
-            -PversionName="2.22.${{ github.run_number }}"
+            -PversionName="2.23.${{ github.run_number }}"
 
       # Advisory only: the artifact is verified locally afterwards, this just says which key signed it.
       - name: Check the signing certificate
@@ -84,7 +84,7 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk \
-          "dist/xiaoldao-2.22.${{ github.run_number }}.apk"
+          "dist/xiaoldao-2.23.${{ github.run_number }}.apk"
           ls -l dist
           unzip -l dist/*.apk | head -30
 
@@ -98,7 +98,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.22.${{ github.run_number }}"; fi
+          if [ -z "$TAG" ]; then TAG="xiaoldao-v2.23.${{ github.run_number }}"; fi
           cat > notes.md <<'NOTES'
           ## English
 
@@ -106,10 +106,9 @@ jobs:
           小灵岛 (xiaoldao) is a notification island for Android: a black pill at the top of the screen that opens for messages, verification codes, pickup codes, deliveries, calls, alarms and the 网易云音乐 player with line-by-line lyrics, plus a small standby pill on the home screen with the clock, the temperature and the weather. Plain Java, two overlay windows, no WebView.
 
           **What is new in this build**
-          - **A sun and a moon where the day/night switch used to be.** Tap the sun for the light page, tap the moon for the dark one; the lit half is the palette in force. A switch only ever says on and off, so on its own it never said which side was which.
-          - **Every page now opens with its own title and one line of explanation,** cards sit a step further off the page with a hair of lift, buttons are taller, 检查更新 is the one filled button, the tab bar grew a hairline above it and the order rows are separated by rules.
-          - **修：显示顺序里「每日一句」出现了两次。** An install from before 2.16 still carried the name of an item that build removed (蓝牙 died in 2.16), and the list rendered every unknown name as its last-resort label. Names this build no longer ships are now dropped when the order is read.
-          - **修：能看到新版本却下载失败。** The package URL used to be followed blindly, so a redirect to another host that the network drops looked like a broken app. The download now asks `api.github.com` for the asset by id first, follows redirects by hand, retries three times per host, refuses any body that does not start with `PK`, and writes the failing host into 保活诊断.
+          - **预览效果 now draws the island inside the app.** The button used to post a real event, so the pill appeared as a system window and nothing happened at all until the service was running. It now binds the same view class the overlay window uses to the same sample event and puts it on the 运行状态 card, above a line that tells you it is a sample: tap to open, tap again to close, and the closed state needs no service and no overlay permission.
+          - **The button changes with the state it switches.** Closed it reads 预览效果 as an outline, open it reads 关闭预览 as a filled accent with a heavier label, so the state is readable at a glance instead of only by re-reading a label.
+          - **The preview cannot swallow a swipe.** It is a picture, not a control, so touches are intercepted and the page still scrolls under a finger that starts on the pill.
 
           **Supported systems** — Android 8.0 and newer, built against Android 14. One universal APK: plain Java, no `lib/`. Reference family: 小米 / 红米 / POCO on MIUI 12-14 or HyperOS. Two of the four MIUI steps are buttons on the 后台常驻 card (自启动, 电池优化), the other two are in MIUI's own settings. Limits worth knowing: Android 12 and newer normally forbids starting a foreground service from the background, which is why the fast path is an alarm rather than only a job; a 强行停止 still cancels everything — alarms, jobs, sticky service — and that is the system's design, nothing an app schedules survives it; 待办 cards read 小米笔记 directly and need root, because it publishes no provider; Open-Meteo's geocoder does not list every Chinese district, which is why the resolved label is printed for you to check; and an SMS card opens the conversation, not one single message. Eight hosts are reached, and only when used: geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com for the typed city, music.163.com for lyrics, api.github.com for the release list and the package itself, github.com only as the fallback download link, and objects.githubusercontent.com / release-assets.githubusercontent.com for the redirect GitHub hands back. With every switch off the app makes no request at all. Permissions, limits and the switch table live in the README: [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md) · [中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md)
 
@@ -119,10 +118,9 @@ jobs:
           小灵岛是一个 Android 通知岛：屏幕顶部一颗黑色胶囊，为消息、验证码、取件码、快递、来电、闹钟和网易云音乐（带逐行歌词）弹开；桌面上还有一个更小的常驻药丸，显示时钟、气温和天气。纯 Java，两个 overlay 窗口，没有 WebView。
 
           **本次更新**
-          - **白天 / 黑夜的那个开关，换成太阳和月亮。** 点太阳是白天，点月亮是黑夜，亮着的那半个就是当前配色。开关只能说明「开」和「关」，说不清哪一边是哪一边。
-          - **四个页面各自有了标题和一句说明，** 卡片离页面更远一点、多了一丝抬起，按钮更高，「检查更新」是整屏唯一的实心按钮，底栏上方多了一条细线，显示顺序的每一项之间也有了分隔线。
-          - **修：显示顺序里「每日一句」出现了两次。** 2.16 之前装过的包里还留着已被删掉的项目名（蓝牙电量是 2.16 删的），而列表会把每一个不认识的名字都当成最后一项来显示。现在读顺序时就把本版本不再提供的名字丢掉。
-          - **修：能看到新版本却下载失败。** 原来下载地址是直接跟着走的，一旦 GitHub 跳到另一个被网络掐掉的域名，看起来就像应用坏了。现在先向 `api.github.com` 按 asset id 要包，自己跟随跳转，每个域名重试三次，只接受以 `PK` 开头的内容，并把失败的域名写进「保活诊断」。
+          - **「预览效果」改成在 App 里画岛。** 这个按钮原来是把一条真实事件发出去，于是胶囊以系统悬浮窗的形式出现在屏幕顶部，而且服务没启动时点了完全没反应。现在它把岛用的那个视图类直接绑上同一条样例事件，放进「运行状态」卡里，下面一行字说明这是样例：点一下展开，再点一下收起，收起状态不需要服务，也不需要悬浮窗权限。
+          - **按钮跟着状态变。** 收起时是描边的「预览效果」，展开时是实心的「关闭预览」并且字更重，一眼能看出来现在在哪一边，不用回头再读一遍文字。
+          - **预览不会抢走滑动。** 它是张画，不是控件：触摸被拦下，手指从胶囊上开始滑也不会让页面卡住。
 
           **支持的系统** — Android 8.0 及以上，按 Android 14 编译。只有一个通用安装包：纯 Java、没有 `lib/`。主要适配小米 / 红米 / POCO 的 MIUI 12–14 与 HyperOS。「后台常驻」卡片上有两个按钮直达其中两步（自启动、电池优化），另外两步在 MIUI 自己的设置里。要提前知道的限制：Android 12 起默认禁止后台启动前台服务，所以快的那条路是闹钟而不是只用 job；「强行停止」仍然会清掉一切——闹钟、job、粘性服务全没了——这是系统的设计，应用排的任何任务都活不过它；待办卡片直接读小米笔记、需要 root，因为它不提供 provider；Open-Meteo 的地理编码没有收录国内每一个区，所以界面上会把解析结果显示出来让你自己核对；短信卡片打开的是会话，不是某一条。只访问八个域名，且只在用到时才访问：geocoding-api.open-meteo.com / api.open-meteo.com / air-quality-api.open-meteo.com（手填城市才会连）、music.163.com（联网歌词）、api.github.com（release 列表与更新包本身）、github.com（只在备用下载链接时访问）与 objects.githubusercontent.com / release-assets.githubusercontent.com（GitHub 跳转后的实际地址）；所有开关都关掉时一次请求都不发。权限、限制和开关说明都在 README：[中文](https://github.com/Kreston8/xiaoldao/blob/main/android/README.zh.md) · [English](https://github.com/Kreston8/xiaoldao/blob/main/android/README.md)
           NOTES

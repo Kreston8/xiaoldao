@@ -6,7 +6,7 @@ plugins {
 
 // CI passes -PversionCode / -PversionName so every release build is unique.
 val appVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
-val appVersionName = (project.findProperty("versionName") as String?) ?: "2.22.0"
+val appVersionName = (project.findProperty("versionName") as String?) ?: "2.23.0"
 
 // The release certificate is pinned: the same RSA-2048 key signs every build, so a newer APK
 // installs straight over the previous one instead of demanding an uninstall. CI restores the

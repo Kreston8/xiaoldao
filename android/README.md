@@ -16,13 +16,9 @@ Four pages, one tab each along the bottom bar: 岛 (the island itself), 常驻 (
 权限 (the five optional permissions) and 设置 (version, updates, keep-alive, diagnostics). Each
 page keeps its own scroll position, and switching costs nothing because all four are built once.
 
-The title bar is the app name, centred, with a sun and a moon in the top-right corner instead of
-a switch. Tap the sun for the light page, the moon for the dark one: a switch only ever says on
-and off, so on its own it never says which side is which. The lit half is the palette in force, and
-the choice is remembered and applied the moment it is tapped.
-Dark is the default, because a black pill on a white page looks like a mistake. Each page opens
-with its own title and one line of explanation, so the four pages read as one app rather than as
-four separate stacks of cards. The island pill
+The title bar is the app name, centred, with the day/night switch in the top-right corner. The
+choice is remembered and the screen is redrawn in the other palette the moment it is flipped.
+Dark is the default, because a black pill on a white page looks like a mistake. The island pill
 itself stays dark in both palettes: it sits on top of other apps, where a light pill would be
 unreadable.
 
@@ -353,11 +349,8 @@ courier is kept rather than dropped. Outside that card:
   either runs, the app reads the release list of `Kreston8/xiaoldao` from
   `api.github.com/repos/Kreston8/xiaoldao/releases?per_page=50`, compares the newest `xiaoldao-v…`
   tag with the installed `versionName`, and — only when the tag is newer — downloads that release's
-  `.apk` into the app's own cache directory, then hands it to the system installer through a content
-  provider that serves exactly that one file. The download asks `api.github.com` for the asset by id
-  first, follows GitHub's redirect to its object store by hand so the log can name the host that
-  actually failed, retries three times per host, and rejects any body that does not start with `PK`:
-  an error page answering 200 used to reach the installer as if it were a package. Three
+  `.apk` from `objects.githubusercontent.com` into the app's own cache directory, then hands it to
+  the system installer through a content provider that serves exactly that one file. Three
   consequences worth saying out loud: the check only happens while the island service is alive, a
   failed check writes its reason under 保活诊断 instead of failing silently, and there is no silent
   install — without root or device-owner rights the last tap is the person's, and the first update
@@ -390,7 +383,9 @@ APK and attaches it to a GitHub release.
 1. Download the `.apk` from the release assets.
 2. Allow installs from unknown sources for the app you download with (MIUI: 设置 → 应用设置 →
    特殊权限 → 安装未知应用).
-3. Open the app, grant the permissions, press 启动小灵岛, then 预览效果.
+3. Open the app and grant the permissions. 预览效果 draws the island on the 运行状态 card, so you
+   can see what it looks like before starting anything; press 启动小灵岛 when you want it on the
+   real screen.
 
 ## Version numbers
 
