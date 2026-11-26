@@ -19,7 +19,6 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Switch;
@@ -62,8 +61,6 @@ public final class MainActivity extends Activity {
     private int COLOR_SUN;
     private int COLOR_MOON;
     private int COLOR_ACCENT;
-    /** The band behind the in-app preview: mid grey by day, slate by night. */
-    private int COLOR_PREVIEW;
     /** True while the light palette is in force; the switch in the title bar mirrors it. */
     private boolean lightTheme;
     /** Fold key for the always-on card, which has a literal title rather than a string id. */
@@ -89,16 +86,12 @@ public final class MainActivity extends Activity {
     private TextView usageState;
     private TextView serviceState;
     private Button startStop;
-    /** The 预览 button, restyled in place, because it is one control with two states. */
+    /** The 预览效果 button, restyled in place, because it is one control with two states. */
     private Button previewButton;
-    /** The band on the card that holds the preview; gone until the button is tapped. */
-    private FrameLayout previewBand;
-    /** The island itself, built by the class the overlay window uses — not a mock-up. */
-    private IslandView previewIsland;
-    /** The line under the preview that says it is a sample; shown only while it is open. */
-    private TextView previewNote;
-    /** True while the island is drawn inside this page. */
+    /** True while the sample card is on the real pill, in front of this screen. */
     private boolean previewing;
+    /** True when the island was off and the preview is the only thing that started it. */
+    private boolean previewStartedService;
     private TextView diagText;
     private Button cityButton;
     private LinearLayout standbyRows;
@@ -228,35 +221,6 @@ public final class MainActivity extends Activity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         addFill(serviceCard, serviceRow, 12);
 
-        // The preview is drawn here, on a grey band that stands in for the top of the
-        // screen, using the very same IslandView the overlay window uses. It is a picture,
-        // not a control: touches are swallowed so the pill's own swipe gestures cannot
-        // fight the page scroll, and none of this needs the service to be running.
-        previewBand = new FrameLayout(this) {
-            @Override
-            public boolean onInterceptTouchEvent(MotionEvent event) {
-                return true;
-            }
-        };
-        previewBand.setBackground(rounded(COLOR_PREVIEW, 16f));
-        previewBand.setPadding(dp(10), dp(14), dp(10), dp(14));
-        previewIsland = new IslandView(this);
-        previewIsland.bind(IslandEvent.preview(this));
-        previewIsland.refreshLook();
-        FrameLayout.LayoutParams islandParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        islandParams.gravity = Gravity.CENTER;
-        previewBand.addView(previewIsland, islandParams);
-        previewBand.setVisibility(View.GONE);
-        addFill(serviceCard, previewBand, 12);
-        previewNote = text("上面这颗就是岛本身，不是画出来的示意图。真实通知到达时它出现在屏幕"
-                + "顶部，高度固定、宽度随文字伸缩；这里只是把它搬进页面，所以不用先启动服务，"
-                + "也不需要悬浮窗权限。", 11f, COLOR_HINT, false);
-        previewNote.setLineSpacing(dp(3), 1f);
-        previewNote.setVisibility(View.GONE);
-        addFill(serviceCard, previewNote, 8);
-        applyPreviewButton();
         addFill(root, serviceCard, 10);
 
         root = columns[PAGE_SETTINGS];
@@ -484,6 +448,26 @@ public final class MainActivity extends Activity {
         syncPrimaries();
         restoreIfWanted();
         showReadyPackage();
+        // The service owns the card, so the button is read from it instead of remembered here:
+        // after a theme switch this screen is new while the pill may still be up.
+        previewing = IslandService.isPreviewing();
+        applyPreviewButton();
+    }
+
+    /**
+     * Leaving the screen ends the preview.
+     *
+     * <p>The pill is a system window, so it would otherwise follow the user into whatever app they
+     * opened next — a sample verification code sitting over real work, with no button left on
+     * screen to switch it off. The preview belongs to this page, so it goes with it. A theme switch
+     * is not leaving: that is a recreate, and onResume reads the state back from the service.
+     */
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (previewing && !isChangingConfigurations()) {
+            stopPreview();
+        }
     }
 
     @Override
@@ -595,55 +579,73 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * The 「预览效果」 button: draws the island on this page, and takes it away again.
+     * The 「预览效果」 button: puts the real pill on screen, over this app, and takes it away again.
      *
-     * <p>It used to post a real event, so the pill appeared as a system window and the service
-     * had to be running first — the button did nothing at all until the island was started.
-     * Now the band above holds the same view class bound to the same sample event, which is a
-     * preview you can open from a cold start: no window, no service, no permission.
+     * <p>The island only draws while the launcher is in front — that is the rule the rest of this
+     * file lives by — so a card posted as an ordinary event is dropped exactly when the settings
+     * screen is the app in front, which is the one place a preview is of any use. The service
+     * therefore takes a command of its own for that one sample card.
      */
     private void togglePreview() {
-        previewing = !previewing;
         if (previewing) {
-            previewIsland.bind(IslandEvent.preview(this));
-            previewIsland.refreshLook();
+            stopPreview();
         } else {
-            // The sample has no countdown and no lyric, but a stopped ticker is still the
-            // honest state: nothing on screen should be waiting to repaint itself.
-            previewIsland.stopTicker();
-        }
-        previewBand.setVisibility(previewing ? View.VISIBLE : View.GONE);
-        previewNote.setVisibility(previewing ? View.VISIBLE : View.GONE);
-        applyPreviewButton();
-        if (previewing) {
-            previewBand.post(this::fitPreview);
+            startPreview();
         }
     }
 
-    /**
-     * Shrinks the sample when even a narrow card cannot hold it at full width.
-     *
-     * <p>The pill is up to 368 dp wide on purpose, which the screen has and a card does not, so
-     * a long sample would be cut off at both ends. Scaling only kicks in when it has to.
-     */
-    private void fitPreview() {
-        if (previewBand.getWidth() == 0) {
+    private void startPreview() {
+        if (!Perms.canOverlay(this)) {
+            toast(R.string.need_overlay);
             return;
         }
-        int available = previewBand.getWidth() - previewBand.getPaddingLeft()
-                - previewBand.getPaddingRight();
-        int needed = previewIsland.getMeasuredWidth();
-        float scale = needed > available && available > 0 ? available / (float) needed : 1f;
-        previewIsland.setScaleX(scale);
-        previewIsland.setScaleY(scale);
+        boolean running = IslandService.isRunning();
+        Intent intent = new Intent(this, IslandService.class)
+                .setAction(IslandService.ACTION_PREVIEW)
+                .putExtra(IslandService.EXTRA_ON, true);
+        try {
+            if (running) {
+                startService(intent);
+            } else {
+                // A visible activity may start a foreground service, and the island has to come up
+                // before a preview has a window to be drawn in.
+                startForegroundService(intent);
+            }
+        } catch (Throwable error) {
+            Diag.note(this, "预览启动失败：" + error.getClass().getSimpleName());
+            Toast.makeText(this, "预览没能启动，看看「保活诊断」",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        previewStartedService = !running;
+        previewing = true;
+        applyPreviewButton();
+        startStop.postDelayed(this::refreshState, 700);
     }
 
-    /**
-     * One control, two faces: an outline that offers the preview, a filled accent that ends it.
-     *
-     * <p>文字 and fill both change, so the state is readable at a glance and not only by
-     * re-reading a label.
-     */
+    /** Ends the preview, and the service too when the preview was the only reason it was running. */
+    private void stopPreview() {
+        previewing = false;
+        applyPreviewButton();
+        Intent preview = new Intent(this, IslandService.class)
+                .setAction(IslandService.ACTION_PREVIEW)
+                .putExtra(IslandService.EXTRA_ON, false);
+        try {
+            startService(preview);
+            if (previewStartedService) {
+                // The island was off before the button was pressed, so leave it off rather than let
+                // a sample card keep a foreground service alive.
+                startService(new Intent(this, IslandService.class)
+                        .setAction(IslandService.ACTION_STOP));
+            }
+        } catch (Throwable error) {
+            Diag.note(this, "预览收起失败：" + error.getClass().getSimpleName());
+        }
+        previewStartedService = false;
+        startStop.postDelayed(this::refreshState, 700);
+    }
+
+    /** One control, two faces: an outline that offers the preview, a filled accent that ends it. */
     private void applyPreviewButton() {
         if (previewButton == null) {
             return;
@@ -653,8 +655,8 @@ public final class MainActivity extends Activity {
         previewButton.setTypeface(previewing ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
         previewButton.setBackground(rounded(previewing ? COLOR_ACCENT : COLOR_BUTTON, 13f));
         previewButton.setContentDescription(previewing
-                ? "关闭预览，把小灵岛的效果收起来"
-                : "在当前页面预览小灵岛的效果");
+                ? "关闭预览，把屏幕顶部的岛收起来"
+                : "在屏幕顶部预览小灵岛的效果");
     }
 
     private boolean canReceiveSms() {
@@ -1517,8 +1519,6 @@ public final class MainActivity extends Activity {
         COLOR_SUN = 0xFFF0A03C;
         COLOR_MOON = 0xFF7C8CE0;
         COLOR_ACCENT = lightTheme ? 0xFF2F6FE0 : 0xFF4C8DFF;
-        // Dark enough to prove the pill is a pill, light enough that a black one still reads.
-        COLOR_PREVIEW = lightTheme ? 0xFFCBD2DC : 0xFF3B414C;
         getWindow().setStatusBarColor(COLOR_BG);
         getWindow().setNavigationBarColor(COLOR_BG);
         View decor = getWindow().getDecorView();

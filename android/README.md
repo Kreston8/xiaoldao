@@ -383,9 +383,9 @@ APK and attaches it to a GitHub release.
 1. Download the `.apk` from the release assets.
 2. Allow installs from unknown sources for the app you download with (MIUI: 设置 → 应用设置 →
    特殊权限 → 安装未知应用).
-3. Open the app and grant the permissions. 预览效果 draws the island on the 运行状态 card, so you
-   can see what it looks like before starting anything; press 启动小灵岛 when you want it on the
-   real screen.
+3. Open the app, grant the permissions, then press 预览效果: the real pill comes up over this
+   screen, with the app behind it — the island only draws over the launcher otherwise, which is why
+   there is a button for it at all. One more tap puts it away; press 启动小灵岛 to keep it.
 
 ## Version numbers
 

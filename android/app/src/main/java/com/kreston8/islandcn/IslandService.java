@@ -40,6 +40,18 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     /** Repaint request from the settings screen: the colour or the opacity changed. */
     static final String ACTION_LOOK = "com.kreston8.islandcn.LOOK";
 
+    /**
+     * The 预览效果 button: put a sample card on the real pill, and take it away again.
+     *
+     * <p>It needs a command of its own because the ordinary path runs through dropFor(), which
+     * drops every card that arrives while the launcher is not in front — and the app you press
+     * the button in is not the launcher.
+     */
+    static final String ACTION_PREVIEW = "com.kreston8.islandcn.PREVIEW";
+
+    /** Whether that preview goes up (true) or comes down (false). */
+    static final String EXTRA_ON = "on";
+
     private static final String CHANNEL_ID = "island_status";
     private static final int NOTIFICATION_ID = 42;
 
@@ -153,6 +165,12 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     private Boolean diagHome;
 
     /** Every music card key starts with this, which is how a stopped track is recognised. */
+    /** Set by 预览效果 and cleared with it: the one flag the launcher test does not govern. */
+    private static volatile boolean previewOn;
+
+    /** The sample card itself, so taking it down cannot be confused with a real notification. */
+    private IslandEvent previewCard;
+
     private static final String MUSIC_KEY = "music:";
     /** WeChat's package name, the one source the notification filter can name. */
     private static final String WECHAT = "com.tencent.mm";
@@ -160,6 +178,11 @@ public final class IslandService extends Service implements IslandBridge.Sink {
 
     static boolean isRunning() {
         return running;
+    }
+
+    /** True while the sample card is on the pill; the settings screen reads it back after recreate. */
+    static boolean isPreviewing() {
+        return previewOn;
     }
 
     @Override
@@ -237,6 +260,17 @@ public final class IslandService extends Service implements IslandBridge.Sink {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (intent != null && ACTION_PREVIEW.equals(intent.getAction())
+                && !intent.getBooleanExtra(EXTRA_ON, true)) {
+            // Taking the preview down may be the only reason this service is up at all, in which
+            // case there is nothing left worth keeping alive.
+            hidePreview();
+            if (!running) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+            return START_STICKY;
+        }
         try {
             startInForeground();
         } catch (Throwable error) {
@@ -262,6 +296,10 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         }
         attachOverlay();
         startWatchers();
+
+        if (intent != null && ACTION_PREVIEW.equals(intent.getAction())) {
+            showPreview();
+        }
 
         startStandby();
         return START_STICKY;
@@ -343,6 +381,8 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         handler.removeCallbacks(flipTask);
         IslandBridge.detach(this);
         running = false;
+        // The card went with the window: a stale true here would leave the button lying.
+        previewOn = false;
         if (island != null && windowManager != null) {
             try {
                 windowManager.removeView(island);
@@ -798,6 +838,43 @@ public final class IslandService extends Service implements IslandBridge.Sink {
         hideIsland();
     }
 
+    /**
+    /**
+     * Puts the sample card on the pill, whatever happens to be in front.
+     *
+     * <p>This is the one path that skips dropFor(). It exists so the pill can be looked at from
+     * inside the app that owns it, which the launcher test would otherwise refuse — and a preview
+     * you have to leave the screen for is not a preview.
+     */
+    private void showPreview() {
+        if (island == null) {
+            attachOverlay();
+        }
+        if (island == null) {
+            return;
+        }
+        previewCard = IslandEvent.preview(this);
+        previewOn = true;
+        applyPhase();
+        Diag.note(this, "预览：在应用之上强制显示岛");
+    }
+
+    /** Takes the sample card down, and nothing else that may be on the pill. */
+    private void hidePreview() {
+        previewOn = false;
+        if (previewCard == null) {
+            applyPhase();
+            return;
+        }
+        if (notifyCard == previewCard) {
+            notifyCard = null;
+            notifyShowing = false;
+        }
+        previewCard = null;
+        applyPhase();
+        Diag.note(this, "预览：收起");
+    }
+
     /** Removes every card from the pill, then lets the phase machine pick what is left. */
     private void hideIsland() {
         notifyCard = null;
@@ -848,7 +925,13 @@ public final class IslandService extends Service implements IslandBridge.Sink {
     private void applyPhase() {
         IslandEvent target = null;
         boolean rotate = false;
-        if (musicCard != null) {
+        if (previewCard != null) {
+            // The preview holds the pill until it is switched off: it is the one card the user
+            // asked for on purpose, so neither a track nor the standby rotation may take it away.
+            notifyCard = previewCard;
+            notifyShowing = true;
+            target = previewCard;
+        } else if (musicCard != null) {
             target = notifyHoldUntil > SystemClock.elapsedRealtime() && notifyCard != null
                     ? notifyCard
                     : musicCard;
