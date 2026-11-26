@@ -142,7 +142,7 @@ final class Updater {
             @Override
             public void run() {
                 try {
-                    run(app, listener, auto);
+                    work(app, listener, auto);
                 } finally {
                     busy = false;
                 }
@@ -220,7 +220,7 @@ final class Updater {
         }
     }
 
-    private static void run(Context app, Listener listener, boolean auto) {
+    private static void work(Context app, Listener listener, boolean auto) {
         try {
             JSONArray list = new JSONArray(get(API));
             int[] best = null;
