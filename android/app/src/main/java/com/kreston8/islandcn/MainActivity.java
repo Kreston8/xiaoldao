@@ -456,7 +456,6 @@ public final class MainActivity extends Activity {
      * Switches read while the service runs, so flipping one needs no restart: the source filters are
      * consulted on every notification and the platform filter on every delivery card.
      */
-     */
     private boolean isLiveKey(String key) {
         return isStandbyKey(key)
                 || Prefs.KEY_NOTIFY_WECHAT.equals(key)
